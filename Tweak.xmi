@@ -1,0 +1,354 @@
+#import <substrate.h>
+
+#import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
+
+#include <notify.h>
+
+#define SIMPLEREACH_DOMAIN "com.gviridis.simplereach"
+#define TAGE_DOMAIN "com.clezz.tage"
+#define PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) method])
+#define TAGE_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) method])
+#define RETURN_IF_DISABLED if (!enabled) { return %orig; }
+
+@interface SBReachabilityManager
++(id)sharedInstance;
+-(void)_handleReachabilityActivated;
+@end
+
+@interface SBGestureRecognizer
+@property(nonatomic) int state;
+@end
+@interface SBFluidSlideGestureRecognizer : SBGestureRecognizer
+@property(readonly, nonatomic) struct CGPoint movementVelocityInPointsPerSecond;
+@end
+@interface SBPanGestureRecognizer : SBFluidSlideGestureRecognizer
+@end
+@interface SBOffscreenSwipeGestureRecognizer : SBPanGestureRecognizer
+@end
+@interface SBControlCenterSwipeGestureRecognizer : SBOffscreenSwipeGestureRecognizer
+@end
+
+typedef NS_ENUM(NSUInteger, BiometricEventType) {
+	BiometricEventTypeFingerUp = 0,
+	BiometricEventTypeFingerDown = 1
+};
+
+@protocol SBUIBiometricEventMonitorDelegate
+@required
+-(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
+@end
+
+@interface SBUIBiometricEventMonitor : NSObject
+- (void)addObserver:(id)arg1;
+- (void)_startMatching;
+- (void)_setMatchingEnabled:(BOOL)arg1;
+- (BOOL)isMatchingEnabled;
+@end
+
+@interface BiometricKit : NSObject
++ (id)manager;
+@end
+
+CFTimeInterval const timeToForgetTime = 0.6;
+CGFloat const minimumYOffsetFactor = 0.1;
+CGFloat const maximumYOffsetFactor = 0.75;
+CGFloat const screenWidth = [[UIScreen mainScreen] bounds].size.width;
+CGFloat const screenHeight = [[UIScreen mainScreen] bounds].size.height;
+CGFloat const oneLineIconsHeight = screenHeight == 736.0 ? 150.0 : 88.0;
+CGFloat const distanceFromHomeButtonCenterToScreenBottom = 42;
+CGFloat const negligibleRegionHeight = 20;
+CGFloat const distanceFromScreenBottomToVirtualCircleTop = screenHeight == 736.0 ? 120.0 : 82.0;
+CGFloat const virtualCircleRadius = distanceFromScreenBottomToVirtualCircleTop / 2.0 + (pow(screenWidth, 2) / distanceFromScreenBottomToVirtualCircleTop / 8.0);
+CGFloat const virtualCircleCenterX = screenWidth / 2.0;
+CGFloat const virtualCircleCenterY = screenHeight + virtualCircleRadius - distanceFromScreenBottomToVirtualCircleTop;
+CGPoint const touchIDCenter = CGPointMake(screenWidth / 2, screenHeight + distanceFromHomeButtonCenterToScreenBottom);
+CGFloat const oneLineIconsHeightFactor = oneLineIconsHeight / screenHeight;
+
+static CGFloat degree_90 = 0.0;
+static CGFloat degree_60 = 0.0;
+static CGFloat degree_45 = 0.0;
+
+static BOOL enabled = NO;
+static BOOL readyToReach = NO;
+static BOOL touchInScreen = NO;
+static BOOL yOffsetFactorChangeRequired = NO;
+static BOOL hasReached = NO;
+static CGPoint swipeDirection = CGPointZero;
+static CFTimeInterval leaveTouchIDTime = 0.0;
+
+static CGFloat moreYOffsetFactorFromDirection(CGPoint p);
+
+// Compatible with Tage
+static BOOL tageIsInstalled();
+static int readTagePrefsSwipeUpCenterAction();
+static void writeTagePrefsSwipeUpCenterAction(int value);
+static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
+static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat delay);
+
+// Compatible with BioLockdown
+static void resetBiometricMatchingEnabled();
+
+static void reloadPrefs();
+void prefsChanged();
+
+// http://iphonedevwiki.net/index.php/BiometricKit.framework
+// https://github.com/Sassoty/BioTesting
+@interface SRBiometricEventObserver : NSObject <SBUIBiometricEventMonitorDelegate> {
+	BOOL observerAdded;
+}
++(id)sharedInstance;
+-(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
+-(void)addObserverIfNecessary;
+@end
+
+@implementation SRBiometricEventObserver
+
++(id)sharedInstance {
+	static id sharedInstance = nil;
+	static dispatch_once_t token = 0;
+	dispatch_once(&token, ^{
+		sharedInstance = [self new];
+	});
+	return sharedInstance;
+}
+
+-(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event {
+	if (!enabled) { return; }
+	if (event != BiometricEventTypeFingerDown) {
+		return;
+	}
+	cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
+	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(timeToForgetTime);
+	hasReached = NO;
+	leaveTouchIDTime = CACurrentMediaTime();
+}
+
+-(void)addObserverIfNecessary {
+	if(observerAdded) {
+		return;
+	}
+	observerAdded = YES;
+
+	SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
+	[monitor addObserver:self];
+}
+
+@end
+
+
+
+static CGFloat moreYOffsetFactorFromDirection(CGPoint p) {
+	if (p.x == 0.0) {
+		return (degree_90 - 2.0) * oneLineIconsHeightFactor;
+	}
+	CGFloat tangent = fabs(p.y / p.x);
+	if (tangent < 1.732) { // tan 60
+		return (degree_45 - 2.0) * oneLineIconsHeightFactor;
+	} else if (tangent < 5.67) { // tan 80
+		return (degree_60 - 2.0) * oneLineIconsHeightFactor;
+	} else {
+		return (degree_90 - 2.0) * oneLineIconsHeightFactor;
+	}
+}
+
+
+
+/************* Compatible with Tage **************/
+
+NSString *const TageDylibPath = @"/Library/MobileSubstrate/DynamicLibraries/Tage.dylib";
+static int tagePrefsSwipeUpCenterAction = -1;
+static BOOL tagePrefsSwipeUpCenterActionCaching = NO;
+
+static BOOL tageIsInstalled() {
+	return [[NSFileManager defaultManager]fileExistsAtPath:TageDylibPath];
+}
+
+static int readTagePrefsSwipeUpCenterAction() {
+	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
+	return TAGE_PREF(intValue, "SwipeUpCenterAction", -1);
+}
+
+static void writeTagePrefsSwipeUpCenterAction(int value) {
+	NSNumber *number = NULL;
+	if (value != -1) {
+		number = [NSNumber numberWithInt: value];
+	}
+	CFPreferencesSetAppValue (CFSTR("SwipeUpCenterAction"), number, CFSTR(TAGE_DOMAIN));
+	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
+	notify_post("com.clezz.tage.preferences-changed");
+}
+
+static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary() {
+	if (!tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
+		tagePrefsSwipeUpCenterAction = readTagePrefsSwipeUpCenterAction();
+		tagePrefsSwipeUpCenterActionCaching = YES;
+		writeTagePrefsSwipeUpCenterAction(0);
+	}
+}
+
+static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat delay) {
+	if (tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+			if (!touchInScreen) {
+				writeTagePrefsSwipeUpCenterAction(tagePrefsSwipeUpCenterAction);
+				tagePrefsSwipeUpCenterActionCaching = NO;
+			}
+		});
+	}
+}
+
+
+
+// Compatible with BioLockdown
+
+static void resetBiometricMatchingEnabled() {
+	SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
+	if ([monitor isMatchingEnabled]) {
+		[monitor _setMatchingEnabled: NO];
+	}
+}
+
+
+
+%hook SpringBoard
+
+- (void)applicationDidFinishLaunching:(id)arg1 {
+	%orig;
+	[[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
+}
+
+%end
+
+
+
+%hook SBControlCenterController
+
+- (void)beginTransitionWithTouchLocation:(CGPoint)touchLocation {
+	RETURN_IF_DISABLED
+	if (hasReached || readyToReach) {
+		return;
+	}
+	if (leaveTouchIDTime == 0.0) {
+		return %orig;
+	}
+	CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
+	if(elapsedTime > timeToForgetTime) {
+		return %orig;
+	}
+	readyToReach = YES;
+}
+
+- (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
+	%orig;
+	if (!arg1) {
+		resetBiometricMatchingEnabled();
+	}
+}
+
+%end
+
+
+
+%hook SBUIController
+
+- (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
+	%orig;
+	touchInScreen = YES;
+}
+
+- (void)_showControlCenterGestureCancelled {
+	%orig;
+	touchInScreen = NO;
+	readyToReach = NO;
+	leaveTouchIDTime = 0.0;
+	hasReached = NO;
+	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+}
+
+- (void)_showControlCenterGestureFailed {
+	%orig;
+	touchInScreen = NO;
+	readyToReach = NO;
+	leaveTouchIDTime = 0.0;
+	hasReached = NO;
+	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+}
+
+- (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
+	RETURN_IF_DISABLED
+	%orig;
+	if (!readyToReach) {
+		return;
+	}
+	if (hasReached) {
+		return;
+	}
+	if (location.y > screenHeight - negligibleRegionHeight
+		|| pow((location.x - virtualCircleCenterX), 2) + pow((location.y - virtualCircleCenterY), 2) < pow(virtualCircleRadius, 2)
+	) {
+		return;
+	}
+	swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
+	yOffsetFactorChangeRequired = YES;
+	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
+	[reachabilityManager _handleReachabilityActivated];
+	hasReached = YES;
+	readyToReach = NO;
+}
+
+%end
+
+
+
+%hook SBReachabilityManager
+- (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
+	%orig;
+	if (!active) {
+		yOffsetFactorChangeRequired = NO;
+		swipeDirection = CGPointZero;
+	}
+}
+
+%end
+
+
+
+%hook SBReachabilitySettings
+
+- (CGFloat)yOffsetFactor {
+	RETURN_IF_DISABLED
+	CGFloat origOffset = %orig;
+	if (!yOffsetFactorChangeRequired) {
+		return origOffset;
+	}
+	CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
+	if (newOffset < minimumYOffsetFactor) {
+		return minimumYOffsetFactor;
+	}
+	if (newOffset > maximumYOffsetFactor) {
+		return maximumYOffsetFactor;
+	}
+	return newOffset;
+}
+
+%end
+
+
+
+static void reloadPrefs() {
+	CFPreferencesAppSynchronize(CFSTR(SIMPLEREACH_DOMAIN));
+	enabled = PREF(boolValue, "Enable", YES);
+	degree_90 = PREF(intValue, "degree_90", 3);
+	degree_60 = PREF(intValue, "degree_60", 4);
+	degree_45 = PREF(intValue, "degree_45", 5);
+}
+
+void prefsChanged() {
+	reloadPrefs();
+}
+
+%ctor {
+	reloadPrefs();
+	CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)prefsChanged, CFSTR("com.gviridis.simplereach.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+}

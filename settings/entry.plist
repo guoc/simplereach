@@ -1,0 +1,10 @@
+{
+  entry = {
+  	bundle = SimpleReachSettings;
+  	cell = PSLinkCell;
+  	detail = SimpleReachSettingsListController;
+  	icon = SimpleReachSettings;
+  	isController = 1;
+  	label = SimpleReach;
+  };
+}
