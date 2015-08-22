@@ -71,8 +71,9 @@ static CGFloat degree_45 = 0.0;
 
 static BOOL enabled = NO;
 static BOOL readyToReach = NO;
+static BOOL shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 static BOOL touchInScreen = NO;
-static BOOL yOffsetFactorChangeRequired = NO;
+static BOOL yOffsetFactor_changeRequired = NO;
 static BOOL hasReached = NO;
 static CGPoint swipeDirection = CGPointZero;
 static CFTimeInterval leaveTouchIDTime = 0.0;
@@ -120,6 +121,13 @@ void prefsChanged();
 	}
 	cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
 	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(timeToForgetTime);
+	shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = YES;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, timeToForgetTime * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+		if (!touchInScreen) {
+			shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
+		}
+		// else: reset when touch leave screen
+	});
 	hasReached = NO;
 	leaveTouchIDTime = CACurrentMediaTime();
 }
@@ -250,6 +258,16 @@ static void resetBiometricMatchingEnabled() {
 
 
 
+static void resetWhenLeaveScreen() {
+	touchInScreen = NO;
+	readyToReach = NO;
+	leaveTouchIDTime = 0.0;
+	hasReached = NO;
+	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+	shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
+}
+
+
 %hook SBUIController
 
 - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
@@ -259,20 +277,12 @@ static void resetBiometricMatchingEnabled() {
 
 - (void)_showControlCenterGestureCancelled {
 	%orig;
-	touchInScreen = NO;
-	readyToReach = NO;
-	leaveTouchIDTime = 0.0;
-	hasReached = NO;
-	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+	resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureFailed {
 	%orig;
-	touchInScreen = NO;
-	readyToReach = NO;
-	leaveTouchIDTime = 0.0;
-	hasReached = NO;
-	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+	resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
@@ -290,11 +300,23 @@ static void resetBiometricMatchingEnabled() {
 		return;
 	}
 	swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
-	yOffsetFactorChangeRequired = YES;
+	yOffsetFactor_changeRequired = YES;
 	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
 	[reachabilityManager _handleReachabilityActivated];
 	hasReached = YES;
 	readyToReach = NO;
+}
+
+- (BOOL)shouldShowControlCenterTabControlOnFirstSwipe {
+	RETURN_IF_DISABLED
+	BOOL r = %orig;
+	if (!r) {
+		return r;
+	}
+	if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
+		return r;
+	}
+	return NO;
 }
 
 %end
@@ -305,7 +327,7 @@ static void resetBiometricMatchingEnabled() {
 - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
 	%orig;
 	if (!active) {
-		yOffsetFactorChangeRequired = NO;
+		yOffsetFactor_changeRequired = NO;
 		swipeDirection = CGPointZero;
 	}
 }
@@ -319,7 +341,7 @@ static void resetBiometricMatchingEnabled() {
 - (CGFloat)yOffsetFactor {
 	RETURN_IF_DISABLED
 	CGFloat origOffset = %orig;
-	if (!yOffsetFactorChangeRequired) {
+	if (!yOffsetFactor_changeRequired) {
 		return origOffset;
 	}
 	CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
