@@ -68,12 +68,14 @@ CGFloat const oneLineIconsHeightFactor = oneLineIconsHeight / screenHeight;
 static CGFloat degree_90 = 0.0;
 static CGFloat degree_60 = 0.0;
 static CGFloat degree_45 = 0.0;
+static CGFloat keepAliveDuration = 0.0;
 
 static BOOL enabled = NO;
 static BOOL readyToReach = NO;
 static BOOL shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 static BOOL touchInScreen = NO;
 static BOOL yOffsetFactor_changeRequired = NO;
+static BOOL duration_changeRequired = NO;
 static BOOL hasReached = NO;
 static CGPoint swipeDirection = CGPointZero;
 static CFTimeInterval leaveTouchIDTime = 0.0;
@@ -301,6 +303,7 @@ static void resetWhenLeaveScreen() {
 	}
 	swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
 	yOffsetFactor_changeRequired = YES;
+	duration_changeRequired = YES;
 	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
 	[reachabilityManager _handleReachabilityActivated];
 	hasReached = YES;
@@ -324,12 +327,25 @@ static void resetWhenLeaveScreen() {
 
 
 %hook SBReachabilityManager
+
 - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
 	%orig;
 	if (!active) {
 		yOffsetFactor_changeRequired = NO;
+		duration_changeRequired = NO;
 		swipeDirection = CGPointZero;
 	}
+}
+
+- (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
+	RETURN_IF_DISABLED
+	if (!duration_changeRequired) {
+		return %orig;
+	}
+	if (keepAliveDuration == 0.0) {
+		return %orig;
+	}
+	return %orig(keepAliveDuration);
 }
 
 %end
@@ -364,6 +380,7 @@ static void reloadPrefs() {
 	degree_90 = PREF(intValue, "degree_90", 3);
 	degree_60 = PREF(intValue, "degree_60", 4);
 	degree_45 = PREF(intValue, "degree_45", 5);
+	keepAliveDuration = PREF(doubleValue, "KeepAliveDuration", 1.5);
 }
 
 void prefsChanged() {

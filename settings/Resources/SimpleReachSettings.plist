@@ -127,6 +127,30 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Duration</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>default</key>
+			<real>1.5</real>
+			<key>min</key>
+			<string>0.5</string>
+			<key>max</key>
+			<string>10</string>
+			<key>showValue</key>
+			<true/>
+			<key>key</key>
+			<string>KeepAliveDuration</string>
+			<key>defaults</key>
+			<string>com.gviridis.simplereach</string>
+			<key>PostNotification</key>
+			<string>com.gviridis.simplereach.prefschanged</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 		</dict>
 		<dict>
 			<key>cell</key>
