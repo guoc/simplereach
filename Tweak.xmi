@@ -11,6 +11,11 @@
 #define TAGE_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) method])
 #define RETURN_IF_DISABLED if (!enabled) { return %orig; }
 
+@interface SBUserAgent
++ (id)sharedUserAgent;
+- (BOOL)deviceIsLocked;
+@end
+
 @interface SBReachabilityManager
 +(id)sharedInstance;
 -(void)_handleReachabilityActivated;
@@ -249,11 +254,26 @@ static void resetBiometricMatchingEnabled() {
 	readyToReach = YES;
 }
 
+/* This is a fix for BioLockdown.
+ * To enter protected apps TWICE successively cause BioLockdown not reset
+ * SBUIBiometricEventMonitor's _matchingEnabled correctly, which make Touch ID
+ * recognise identity matching slower and may fail SimpleReach if users tap
+ * Touch ID quickly. When this happen, Touch ID tapping will not be recorded by
+ * SimpleReach, and Control Center will be presented.
+ * It is a RARE case, so ONLY FIX IT AFTER HAPPENING.
+
+ * The function below is called when Control Center is dismissed, except when
+ * device is locked (identity matching is required to unlock device).
+ */
 - (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
 	%orig;
-	if (!arg1) {
-		resetBiometricMatchingEnabled();
+	if (arg1) {
+		return;
 	}
+	if ([[%c(SBUserAgent) sharedUserAgent] deviceIsLocked]) {
+		return;
+	}
+	resetBiometricMatchingEnabled();
 }
 
 %end
