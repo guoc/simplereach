@@ -9,7 +9,7 @@
 #define TAGE_DOMAIN "com.clezz.tage"
 #define PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) method])
 #define TAGE_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) method])
-#define RETURN_IF_DISABLED if (!enabled) { return %orig; }
+#define RETURN_IF_DISABLED(returnValue) if (!enabled) { return (returnValue); }
 
 @interface SBUserAgent
 + (id)sharedUserAgent;
@@ -113,6 +113,7 @@ void prefsChanged();
 @implementation SRBiometricEventObserver
 
 +(id)sharedInstance {
+	RETURN_IF_DISABLED(nil)
 	static id sharedInstance = nil;
 	static dispatch_once_t token = 0;
 	dispatch_once(&token, ^{
@@ -122,6 +123,7 @@ void prefsChanged();
 }
 
 -(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event {
+	RETURN_IF_DISABLED({})
 	if (!enabled) { return; }
 	if (event != BiometricEventTypeFingerDown) {
 		return;
@@ -140,6 +142,7 @@ void prefsChanged();
 }
 
 -(void)addObserverIfNecessary {
+	RETURN_IF_DISABLED({})
 	if(observerAdded) {
 		return;
 	}
@@ -154,6 +157,7 @@ void prefsChanged();
 
 
 static CGFloat moreYOffsetFactorFromDirection(CGPoint p) {
+	RETURN_IF_DISABLED(0.0)
 	if (p.x == 0.0) {
 		return (degree_90 - 2.0) * oneLineIconsHeightFactor;
 	}
@@ -176,15 +180,18 @@ static int tagePrefsSwipeUpCenterAction = -1;
 static BOOL tagePrefsSwipeUpCenterActionCaching = NO;
 
 static BOOL tageIsInstalled() {
+	// Don't need RETURN_IF_DISABLED
 	return [[NSFileManager defaultManager]fileExistsAtPath:TageDylibPath];
 }
 
 static int readTagePrefsSwipeUpCenterAction() {
+	// Don't need RETURN_IF_DISABLED
 	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
 	return TAGE_PREF(intValue, "SwipeUpCenterAction", -1);
 }
 
 static void writeTagePrefsSwipeUpCenterAction(int value) {
+	// Don't need RETURN_IF_DISABLED
 	NSNumber *number = NULL;
 	if (value != -1) {
 		number = [NSNumber numberWithInt: value];
@@ -195,6 +202,7 @@ static void writeTagePrefsSwipeUpCenterAction(int value) {
 }
 
 static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary() {
+	RETURN_IF_DISABLED({})
 	if (!tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
 		tagePrefsSwipeUpCenterAction = readTagePrefsSwipeUpCenterAction();
 		tagePrefsSwipeUpCenterActionCaching = YES;
@@ -203,6 +211,7 @@ static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary() {
 }
 
 static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat delay) {
+	RETURN_IF_DISABLED({})
 	if (tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
 			if (!touchInScreen) {
@@ -218,6 +227,7 @@ static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat dela
 // Compatible with BioLockdown
 
 static void resetBiometricMatchingEnabled() {
+	RETURN_IF_DISABLED({})
 	SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
 	if ([monitor isMatchingEnabled]) {
 		[monitor _setMatchingEnabled: NO];
@@ -229,6 +239,7 @@ static void resetBiometricMatchingEnabled() {
 %hook SpringBoard
 
 - (void)applicationDidFinishLaunching:(id)arg1 {
+	// Don't need RETURN_IF_DISABLED
 	%orig;
 	[[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
 }
@@ -240,7 +251,7 @@ static void resetBiometricMatchingEnabled() {
 %hook SBControlCenterController
 
 - (void)beginTransitionWithTouchLocation:(CGPoint)touchLocation {
-	RETURN_IF_DISABLED
+	RETURN_IF_DISABLED(%orig)
 	if (hasReached || readyToReach) {
 		return;
 	}
@@ -266,6 +277,7 @@ static void resetBiometricMatchingEnabled() {
  * device is locked (identity matching is required to unlock device).
  */
 - (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	if (arg1) {
 		return;
@@ -281,6 +293,7 @@ static void resetBiometricMatchingEnabled() {
 
 
 static void resetWhenLeaveScreen() {
+	// Don't need RETURN_IF_DISABLED
 	touchInScreen = NO;
 	readyToReach = NO;
 	leaveTouchIDTime = 0.0;
@@ -293,22 +306,25 @@ static void resetWhenLeaveScreen() {
 %hook SBUIController
 
 - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	touchInScreen = YES;
 }
 
 - (void)_showControlCenterGestureCancelled {
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureFailed {
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
-	RETURN_IF_DISABLED
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	if (!readyToReach) {
 		return;
@@ -331,7 +347,7 @@ static void resetWhenLeaveScreen() {
 }
 
 - (BOOL)shouldShowControlCenterTabControlOnFirstSwipe {
-	RETURN_IF_DISABLED
+	RETURN_IF_DISABLED(%orig)
 	BOOL r = %orig;
 	if (!r) {
 		return r;
@@ -349,6 +365,7 @@ static void resetWhenLeaveScreen() {
 %hook SBReachabilityManager
 
 - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
+	RETURN_IF_DISABLED(%orig)
 	%orig;
 	if (!active) {
 		yOffsetFactor_changeRequired = NO;
@@ -358,7 +375,7 @@ static void resetWhenLeaveScreen() {
 }
 
 - (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
-	RETURN_IF_DISABLED
+	RETURN_IF_DISABLED(%orig)
 	if (!duration_changeRequired) {
 		return %orig;
 	}
@@ -375,7 +392,7 @@ static void resetWhenLeaveScreen() {
 %hook SBReachabilitySettings
 
 - (CGFloat)yOffsetFactor {
-	RETURN_IF_DISABLED
+	RETURN_IF_DISABLED(%orig)
 	CGFloat origOffset = %orig;
 	if (!yOffsetFactor_changeRequired) {
 		return origOffset;
