@@ -176,6 +176,7 @@ static CGFloat moreYOffsetFactorFromDirection(CGPoint p) {
 /************* Compatible with Tage **************/
 
 NSString *const TageDylibPath = @"/Library/MobileSubstrate/DynamicLibraries/Tage.dylib";
+int const tagePrefsSwipeUpCenterActionDefaultValue = 3;
 static int tagePrefsSwipeUpCenterAction = -1;
 static BOOL tagePrefsSwipeUpCenterActionCaching = NO;
 
@@ -187,15 +188,12 @@ static BOOL tageIsInstalled() {
 static int readTagePrefsSwipeUpCenterAction() {
 	// Don't need RETURN_IF_DISABLED
 	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
-	return TAGE_PREF(intValue, "SwipeUpCenterAction", -1);
+	return TAGE_PREF(intValue, "SwipeUpCenterAction", tagePrefsSwipeUpCenterActionDefaultValue);
 }
 
 static void writeTagePrefsSwipeUpCenterAction(int value) {
 	// Don't need RETURN_IF_DISABLED
-	NSNumber *number = NULL;
-	if (value != -1) {
-		number = [NSNumber numberWithInt: value];
-	}
+	NSNumber *number = [NSNumber numberWithInt: value];
 	CFPreferencesSetAppValue (CFSTR("SwipeUpCenterAction"), number, CFSTR(TAGE_DOMAIN));
 	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
 	notify_post("com.clezz.tage.preferences-changed");
@@ -214,9 +212,9 @@ static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat dela
 	RETURN_IF_DISABLED({})
 	if (tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-			if (!touchInScreen) {
-				writeTagePrefsSwipeUpCenterAction(tagePrefsSwipeUpCenterAction);
+			if (!touchInScreen && tagePrefsSwipeUpCenterActionCaching) {
 				tagePrefsSwipeUpCenterActionCaching = NO;
+				writeTagePrefsSwipeUpCenterAction(tagePrefsSwipeUpCenterAction);
 			}
 		});
 	}
