@@ -7,8 +7,10 @@
 
 #define SIMPLEREACH_DOMAIN "com.gviridis.simplereach"
 #define TAGE_DOMAIN "com.clezz.tage"
+#define PUSHABILITY_DOMAIN "com.joshdoctors.pushability"
 #define PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) method])
 #define TAGE_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) method])
+#define PUSHABILITY_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(PUSHABILITY_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(PUSHABILITY_DOMAIN)) method])
 #define RETURN_IF_DISABLED(returnValue) if (!enabled) { return (returnValue); }
 
 @interface SBUserAgent
@@ -93,6 +95,13 @@ static int readTagePrefsSwipeUpCenterAction();
 static void writeTagePrefsSwipeUpCenterAction(int value);
 static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
 static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat delay);
+
+// Compatible with Pushability
+static BOOL pushabilityIsInstalled();
+static BOOL readPushabilityPrefsEnabled();
+static void writePushabilityPrefsEnabled(BOOL value);
+static void cacheAndModifyPushabilityPrefsEnabledIfNecessary();
+static void restorePushabilityPrefsEnabledIfNecessaryWithDelay(CGFloat delay);
 
 // Compatible with BioLockdown
 static void resetBiometricMatchingEnabled();
@@ -222,6 +231,55 @@ static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat dela
 
 
 
+/************* Compatible with Pushability **************/
+
+NSString *const PushabilityDylibPath = @"/Library/MobileSubstrate/DynamicLibraries/Pushability.dylib";
+BOOL const pushabilityPrefsEnabledDefaultValue = 0;
+static BOOL pushabilityPrefsEnabled = 0;
+static BOOL pushabilityPrefsEnabledCaching = NO;
+
+static BOOL pushabilityIsInstalled() {
+	// Don't need RETURN_IF_DISABLED
+	return [[NSFileManager defaultManager]fileExistsAtPath:PushabilityDylibPath];
+}
+
+static BOOL readPushabilityPrefsEnabled() {
+	// Don't need RETURN_IF_DISABLED
+	CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
+	return PUSHABILITY_PREF(boolValue, "enabled", pushabilityPrefsEnabledDefaultValue);
+}
+
+static void writePushabilityPrefsEnabled(BOOL value) {
+	// Don't need RETURN_IF_DISABLED
+	NSNumber *number = [NSNumber numberWithBool: value];
+	CFPreferencesSetAppValue (CFSTR("enabled"), number, CFSTR(PUSHABILITY_DOMAIN));
+	CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
+	notify_post("com.joshdoctors.pushability/settingschanged");
+}
+
+static void cacheAndModifyPushabilityPrefsEnabledIfNecessary() {
+	RETURN_IF_DISABLED({})
+	if (!pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
+		pushabilityPrefsEnabled = readPushabilityPrefsEnabled();
+		pushabilityPrefsEnabledCaching = YES;
+		writePushabilityPrefsEnabled(0);
+	}
+}
+
+static void restorePushabilityPrefsEnabledIfNecessaryWithDelay(CGFloat delay) {
+	RETURN_IF_DISABLED({})
+	if (pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+			if (!touchInScreen && pushabilityPrefsEnabledCaching) {
+				pushabilityPrefsEnabledCaching = NO;
+				writePushabilityPrefsEnabled(pushabilityPrefsEnabled);
+			}
+		});
+	}
+}
+
+
+
 // Compatible with BioLockdown
 
 static void resetBiometricMatchingEnabled() {
@@ -307,6 +365,7 @@ static void resetWhenLeaveScreen() {
 	RETURN_IF_DISABLED(%orig)
 	%orig;
 	touchInScreen = YES;
+	cacheAndModifyPushabilityPrefsEnabledIfNecessary();
 }
 
 - (void)_showControlCenterGestureCancelled {
@@ -366,6 +425,7 @@ static void resetWhenLeaveScreen() {
 	RETURN_IF_DISABLED(%orig)
 	%orig;
 	if (!active) {
+		restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
 		yOffsetFactor_changeRequired = NO;
 		duration_changeRequired = NO;
 		swipeDirection = CGPointZero;
