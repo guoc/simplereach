@@ -5,6 +5,12 @@
 OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
 static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID");
 
+@interface PSListController()
+@property(nonatomic, readonly, retain) UINavigationController *navigationController;
+@property(nonatomic, readonly, retain) UINavigationItem *navigationItem;
+-(void)loadView;
+@end
+
 @interface PSTableCell()
 @property(nonatomic, readonly, retain) UIView *contentView;
 - (id)initWithStyle:(int)arg1 reuseIdentifier:(id)arg2 specifier:(id)arg3;
@@ -12,14 +18,28 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 
 @interface SimpleReachSettingsListController: PSListController<MFMailComposeViewControllerDelegate> {
 }
+-(void)loadView;
 @end
 
 @implementation SimpleReachSettingsListController
+
+-(void)loadView {
+	[super loadView];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(shareTapped:)];
+}
+
 - (id)specifiers {
 	if(_specifiers == nil) {
 		_specifiers = [[self loadSpecifiersFromPlistName:@"SimpleReachSettings" target:self] retain];
 	}
 	return _specifiers;
+}
+
+-(void)shareTapped:(UIBarButtonItem *)sender {
+	NSString *text = @"Check out SimpleReach by @gviridis on Cydia! http://cydia.saurik.com/package/com.gviridis.simplereach/";
+
+	UIActivityViewController *viewController = [[[UIActivityViewController alloc] initWithActivityItems:[NSArray arrayWithObjects:text, nil] applicationActivities:nil] autorelease];
+	[self.navigationController presentViewController:viewController animated:YES completion:NULL];
 }
 
 
