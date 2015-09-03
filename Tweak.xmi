@@ -83,6 +83,7 @@ static BOOL shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 static BOOL touchInScreen = NO;
 static BOOL yOffsetFactor_changeRequired = NO;
 static BOOL duration_changeRequired = NO;
+static BOOL ohwDisableRequired = NO;
 static BOOL hasReached = NO;
 static CGPoint swipeDirection = CGPointZero;
 static CFTimeInterval leaveTouchIDTime = 0.0;
@@ -397,6 +398,7 @@ static void resetWhenLeaveScreen() {
 	swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
 	yOffsetFactor_changeRequired = YES;
 	duration_changeRequired = YES;
+	ohwDisableRequired = YES;
 	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
 	[reachabilityManager _handleReachabilityActivated];
 	hasReached = YES;
@@ -428,6 +430,7 @@ static void resetWhenLeaveScreen() {
 		restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
 		yOffsetFactor_changeRequired = NO;
 		duration_changeRequired = NO;
+		ohwDisableRequired = NO;
 		swipeDirection = CGPointZero;
 	}
 }
@@ -441,6 +444,13 @@ static void resetWhenLeaveScreen() {
 		return %orig;
 	}
 	return %orig(keepAliveDuration);
+}
+
+- (BOOL)ohw_shouldOverwriteReachability {
+	if (!ohwDisableRequired) {
+		return %orig;
+	}
+	return NO;
 }
 
 %end
