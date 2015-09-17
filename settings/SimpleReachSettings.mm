@@ -31,11 +31,11 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 // https://gist.github.com/vhbit/958738
 - (NSURL *)getSNSURLForUserName:(NSString *)userName {
     NSArray *urls = [NSArray arrayWithObjects:
-        @"twitter:@{username}"                            // Twitter
-      , @"tweetbot:///user_profile/{username}"            // TweetBot
+        @"tweetbot:///user_profile/{username}"            // TweetBot
    // , @"twitterrific:///profile?screen_name={username}" // Twitterrific
       , @"echofon:///user_timeline?{username}"            // Echofon
    // , @"tweetings:///user?screen_name={username}",      // Tweetings
+      , @"twitter:@{username}"                            // Twitter
    // , @"moke:///user?domain={username}"                 // Moke
       , @"http://gviridis.com/sns/{username}"
       , nil];
