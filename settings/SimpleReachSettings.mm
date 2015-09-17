@@ -16,6 +16,43 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 - (id)initWithStyle:(int)arg1 reuseIdentifier:(id)arg2 specifier:(id)arg3;
 @end
 
+@interface PSFooterHyperlinkView : UIView
+- (instancetype)initWithSpecifier:(id)specifier;
+- (void)setLinkRange:(NSRange)range;
+- (void)setURL:(id)url;
+- (NSString *)text;
+@end
+
+@interface NSObject (SRHelpers)
+@end
+
+@implementation NSObject (SRHelpers)
+
+// https://gist.github.com/vhbit/958738
+- (NSURL *)getSNSURLForUserName:(NSString *)userName {
+    NSArray *urls = [NSArray arrayWithObjects:
+        @"twitter:@{username}"                            // Twitter
+      , @"tweetbot:///user_profile/{username}"            // TweetBot
+   // , @"twitterrific:///profile?screen_name={username}" // Twitterrific
+      , @"echofon:///user_timeline?{username}"            // Echofon
+   // , @"tweetings:///user?screen_name={username}",      // Tweetings
+   // , @"moke:///user?domain={username}"                 // Moke
+      , @"http://gviridis.com/sns/{username}"
+      , nil];
+
+    UIApplication *application = [UIApplication sharedApplication];
+    for (NSString *candidate in urls) {
+        candidate = [candidate stringByReplacingOccurrencesOfString:@"{username}" withString:userName];
+        NSURL *url = [NSURL URLWithString:candidate];
+        if ([application canOpenURL:url]) {
+            return url;
+        }
+    }
+    return nil;
+}
+
+@end
+
 @interface SimpleReachSettingsListController: PSListController<MFMailComposeViewControllerDelegate> {
 }
 -(void)loadView;
@@ -103,28 +140,12 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 	}];
 }
 
-// https://gist.github.com/vhbit/958738
 - (BOOL)openSNSClientForUserName:(NSString *)userName {
-    NSArray *urls = [NSArray arrayWithObjects:
-        @"twitter:@{username}"                            // Twitter
-      , @"tweetbot:///user_profile/{username}"            // TweetBot
-   // , @"twitterrific:///profile?screen_name={username}" // Twitterrific
-      , @"echofon:///user_timeline?{username}"            // Echofon
-   // , @"tweetings:///user?screen_name={username}",      // Tweetings
-   // , @"moke:///user?domain={username}"                 // Moke
-      , @"http://gviridis.com/sns/{username}"
-      , nil];
-
-    UIApplication *application = [UIApplication sharedApplication];
-    for (NSString *candidate in urls) {
-        candidate = [candidate stringByReplacingOccurrencesOfString:@"{username}" withString:userName];
-        NSURL *url = [NSURL URLWithString:candidate];
-        if ([application canOpenURL:url]) {
-            [application openURL:url];
-            return YES;
-        }
-    }
-    return NO;
+	NSURL *url = [self getSNSURLForUserName:userName];
+	if (!url) return NO;
+	UIApplication *application = [UIApplication sharedApplication];
+	[application openURL:url];
+	return YES;
 }
 
 - (void)followOnSNS: (PSSpecifier *)specifier {
@@ -161,6 +182,23 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 
 - (CGFloat)preferredHeightForWidth:(double)arg1 inTableView:(id)arg2 {
     return 90.0;
+}
+
+@end
+
+@interface SRFooterHyperlinkView : PSFooterHyperlinkView
+- (id)initWithSpecifier:(id)arg1;
+@end
+
+@implementation SRFooterHyperlinkView
+
+- (id)initWithSpecifier:(id)specifier {
+	self = [super initWithSpecifier:specifier];
+	NSString *SNSID = [specifier propertyForKey: @"SNSID"];
+	[self setURL: [self getSNSURLForUserName:SNSID]];
+	NSUInteger length = [[self text] length];
+    [self setLinkRange: NSMakeRange(length-1,1)];
+	return self;
 }
 
 @end

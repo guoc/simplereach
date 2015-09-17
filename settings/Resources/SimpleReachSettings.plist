@@ -163,8 +163,14 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerCellClass</key>
+			<string>SRFooterHyperlinkView</string>
 			<key>footerText</key>
-			<string>添乱ed happily by 😼Nezha</string>
+			<string>添乱ed happily by 😼Nezha  </string>
+			<key>action</key>
+			<string>followOnSNS:</string>
+			<key>SNSID</key>
+			<string>nezhawg</string>
 		</dict>
 		<dict>
 			<key>cell</key>
