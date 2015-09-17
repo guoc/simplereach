@@ -170,17 +170,17 @@
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>action</key>
-			<string>followOnTwitter:</string>
+			<string>followOnSNS:</string>
 			<key>confirmation</key>
 			<dict>
 				<key>prompt</key>
-				<string>Leaving Settings to Twitter?</string>
+				<string>Leaving Settings?</string>
 				<key>title</key>
 				<string>OK</string>
 				<key>cancelTitle</key>
 				<string>Cancel</string>
 			</dict>
-			<key>twitterID</key>
+			<key>SNSID</key>
 			<string>Jingka_0</string>
 			<key>label</key>
 			<string>Designed by @Jingka_0</string>
@@ -189,17 +189,17 @@
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>action</key>
-			<string>followOnTwitter:</string>
+			<string>followOnSNS:</string>
 			<key>confirmation</key>
 			<dict>
 				<key>prompt</key>
-				<string>Leaving Settings to Twitter?</string>
+				<string>Leaving Settings?</string>
 				<key>title</key>
 				<string>OK</string>
 				<key>cancelTitle</key>
 				<string>Cancel</string>
 			</dict>
-			<key>twitterID</key>
+			<key>SNSID</key>
 			<string>gviridis</string>
 			<key>label</key>
 			<string>Developed by @gviridis</string>

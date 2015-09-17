@@ -104,14 +104,16 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 }
 
 // https://gist.github.com/vhbit/958738
-- (BOOL)openTwitterClientForUserName:(NSString*)userName {
-    NSArray *urls = [NSArray arrayWithObjects: @"twitter:@{username}", // Twitter
-							                   @"tweetbot:///user_profile/{username}", // TweetBot
-										    //    @"twitterrific:///profile?screen_name={username}", // Twitterrific
-                                               @"echofon:///user_timeline?{username}", // Echofon
-                    						//    @"tweetings:///user?screen_name={username}", // Tweetings
-						                       @"http://twitter.com/{username}", // Web fallback,
-                                               nil];
+- (BOOL)openSNSClientForUserName:(NSString *)userName {
+    NSArray *urls = [NSArray arrayWithObjects:
+        @"twitter:@{username}"                            // Twitter
+      , @"tweetbot:///user_profile/{username}"            // TweetBot
+   // , @"twitterrific:///profile?screen_name={username}" // Twitterrific
+      , @"echofon:///user_timeline?{username}"            // Echofon
+   // , @"tweetings:///user?screen_name={username}",      // Tweetings
+   // , @"moke:///user?domain={username}"                 // Moke
+      , @"http://gviridis.com/sns/{username}"
+      , nil];
 
     UIApplication *application = [UIApplication sharedApplication];
     for (NSString *candidate in urls) {
@@ -125,9 +127,9 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
     return NO;
 }
 
-- (void)followOnTwitter: (PSSpecifier *)specifier {
-	NSString *twitterID = [specifier propertyForKey: @"twitterID"];
-	[self openTwitterClientForUserName: twitterID];
+- (void)followOnSNS: (PSSpecifier *)specifier {
+	NSString *SNSID = [specifier propertyForKey: @"SNSID"];
+	[self openSNSClientForUserName: SNSID];
 }
 
 @end
