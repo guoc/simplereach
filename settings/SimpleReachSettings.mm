@@ -80,12 +80,15 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 
 		CFRelease(udid);
 	} else {
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 		UIAlertView *alert = [[UIAlertView alloc] initWithTitle: @"Error"
 		                                                message: @"Please setup an email account in Settings.app -> Mail, Contacts, Calendars."
 		                                               delegate: self
 	                                    	  cancelButtonTitle: @"OK"
 		                                      otherButtonTitles: nil, nil];
 		[alert show];
+		#pragma GCC diagnostic pop
 	}
 }
 
