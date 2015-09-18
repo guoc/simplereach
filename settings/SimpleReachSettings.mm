@@ -96,6 +96,7 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 		encoding:NSUTF8StringEncoding];
 		CFStringRef udid = MGCopyAnswer(kMobileDeviceUniqueIdentifier);
 		NSString *messageBody = [NSString stringWithFormat: @"\n\n\n\n"
+		                                                     "-----------------------------\n"	
 		                                                     "Please do not delete the text and attachments below.\n\n"
 															 "%@ %@ %@\n"
 														  , deviceModel
