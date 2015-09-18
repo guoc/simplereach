@@ -61,104 +61,104 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 @implementation SimpleReachSettingsListController
 
 -(void)loadView {
-	[super loadView];
-	// self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(shareTapped:)];
+    [super loadView];
+    // self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(shareTapped:)];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Share" style:UIBarButtonItemStylePlain target:self action:@selector(shareTapped:)];
 }
 
 - (id)specifiers {
-	if(_specifiers == nil) {
-		_specifiers = [[self loadSpecifiersFromPlistName:@"SimpleReachSettings" target:self] retain];
-	}
-	return _specifiers;
+    if(_specifiers == nil) {
+        _specifiers = [[self loadSpecifiersFromPlistName:@"SimpleReachSettings" target:self] retain];
+    }
+    return _specifiers;
 }
 
 -(void)shareTapped:(UIBarButtonItem *)sender {
-	NSString *text = @"Check out SimpleReach by @gviridis on Cydia! http://cydia.saurik.com/package/com.gviridis.simplereach/";
+    NSString *text = @"Check out SimpleReach by @gviridis on Cydia! http://cydia.saurik.com/package/com.gviridis.simplereach/";
 
-	UIActivityViewController *viewController = [[[UIActivityViewController alloc] initWithActivityItems:[NSArray arrayWithObjects:text, nil] applicationActivities:nil] autorelease];
-	[self.navigationController presentViewController:viewController animated:YES completion:NULL];
+    UIActivityViewController *viewController = [[[UIActivityViewController alloc] initWithActivityItems:[NSArray arrayWithObjects:text, nil] applicationActivities:nil] autorelease];
+    [self.navigationController presentViewController:viewController animated:YES completion:NULL];
 }
 
 
 // https://www.reddit.com/r/jailbreakdevelopers/comments/3cyhkg/how_to_add_an_email_popup_in_a_preference_bundle/?
 -(void)mailTapped {
-	if ([MFMailComposeViewController canSendMail]) {
-		MFMailComposeViewController *mailComposeViewController = [[MFMailComposeViewController alloc] init];
+    if ([MFMailComposeViewController canSendMail]) {
+        MFMailComposeViewController *mailComposeViewController = [[MFMailComposeViewController alloc] init];
 
-		[mailComposeViewController setToRecipients:@[@"gviridis+simplereach@gmail.com"]];
+        [mailComposeViewController setToRecipients:@[@"gviridis+simplereach@gmail.com"]];
 
-		[mailComposeViewController setSubject:@"SimpleReach Support"];
+        [mailComposeViewController setSubject:@"SimpleReach Support"];
 
-		struct utsname systemInfo;
-		uname(&systemInfo);
-		NSString *deviceModel = [NSString stringWithCString:systemInfo.machine
-		encoding:NSUTF8StringEncoding];
-		CFStringRef udid = MGCopyAnswer(kMobileDeviceUniqueIdentifier);
-		NSString *messageBody = [NSString stringWithFormat: @"\n\n\n\n"
-		                                                     "-----------------------------\n"	
-		                                                     "Please do not delete the text and attachments below.\n\n"
-															 "%@ %@ %@\n"
-														  , deviceModel
-														  , [[UIDevice currentDevice] systemVersion]
-														  , udid];
-		[mailComposeViewController setMessageBody: messageBody
-		                                   isHTML: NO];
+        struct utsname systemInfo;
+        uname(&systemInfo);
+        NSString *deviceModel = [NSString stringWithCString:systemInfo.machine
+        encoding:NSUTF8StringEncoding];
+        CFStringRef udid = MGCopyAnswer(kMobileDeviceUniqueIdentifier);
+        NSString *messageBody = [NSString stringWithFormat: @"\n\n\n\n"
+                                                             "-----------------------------\n"
+                                                             "Please do not delete the text and attachments below.\n\n"
+                                                             "%@ %@ %@\n"
+                                                          , deviceModel
+                                                          , [[UIDevice currentDevice] systemVersion]
+                                                          , udid];
+        [mailComposeViewController setMessageBody: messageBody
+                                           isHTML: NO];
 
-		[mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/var/mobile/Library/Preferences/com.gviridis.simplereach.plist"] mimeType:@"application/xml" fileName:@"com.gviridis.simplereach.plist"];
-		[mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/cydia.log"] mimeType:@"text/plain" fileName:@"cydia.log"];
-		#pragma GCC diagnostic push
-		#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-		system("/usr/bin/dpkg -l >/tmp/dpkgl.log");
-		#pragma GCC diagnostic pop
-    	[mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/dpkgl.log"] mimeType:@"text/plain" fileName:@"dpkgl.log"];
+        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/var/mobile/Library/Preferences/com.gviridis.simplereach.plist"] mimeType:@"application/xml" fileName:@"com.gviridis.simplereach.plist"];
+        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/cydia.log"] mimeType:@"text/plain" fileName:@"cydia.log"];
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        system("/usr/bin/dpkg -l >/tmp/dpkgl.log");
+        #pragma GCC diagnostic pop
+        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/dpkgl.log"] mimeType:@"text/plain" fileName:@"dpkgl.log"];
 
-		mailComposeViewController.mailComposeDelegate = self;
+        mailComposeViewController.mailComposeDelegate = self;
 
-		[[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:mailComposeViewController animated:YES completion:NULL];
+        [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:mailComposeViewController animated:YES completion:NULL];
 
-		CFRelease(udid);
-	} else {
-		#pragma GCC diagnostic push
-		#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-		UIAlertView *alert = [[UIAlertView alloc] initWithTitle: @"Error"
-		                                                message: @"Please setup an email account in Settings.app -> Mail, Contacts, Calendars."
-		                                               delegate: self
-	                                    	  cancelButtonTitle: @"OK"
-		                                      otherButtonTitles: nil, nil];
-		[alert show];
-		#pragma GCC diagnostic pop
-	}
+        CFRelease(udid);
+    } else {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        UIAlertView *alert = [[UIAlertView alloc] initWithTitle: @"Error"
+                                                        message: @"Please setup an email account in Settings.app -> Mail, Contacts, Calendars."
+                                                       delegate: self
+                                              cancelButtonTitle: @"OK"
+                                              otherButtonTitles: nil, nil];
+        [alert show];
+        #pragma GCC diagnostic pop
+    }
 }
 
 - (void)mailComposeController:(MFMailComposeViewController*)controller didFinishWithResult:(MFMailComposeResult)result error:(NSError*)error {
-	if (result == MFMailComposeResultSent) {
+    if (result == MFMailComposeResultSent) {
 
-	} else if (result == MFMailComposeResultCancelled) {
+    } else if (result == MFMailComposeResultCancelled) {
 
-	}
-	[controller dismissViewControllerAnimated:YES completion:^{
+    }
+    [controller dismissViewControllerAnimated:YES completion:^{
 
-	}];
+    }];
 }
 
 - (BOOL)openSNSClientForUserName:(NSString *)userName {
-	NSURL *url = [self getSNSURLForUserName:userName];
-	if (!url) return NO;
-	UIApplication *application = [UIApplication sharedApplication];
-	[application openURL:url];
-	return YES;
+    NSURL *url = [self getSNSURLForUserName:userName];
+    if (!url) return NO;
+    UIApplication *application = [UIApplication sharedApplication];
+    [application openURL:url];
+    return YES;
 }
 
 - (void)followOnSNS: (PSSpecifier *)specifier {
-	NSString *SNSID = [specifier propertyForKey: @"SNSID"];
-	[self openSNSClientForUserName: SNSID];
+    NSString *SNSID = [specifier propertyForKey: @"SNSID"];
+    [self openSNSClientForUserName: SNSID];
 }
 
 @end
 
 @interface SRHeaderCell : PSTableCell{
-	UILabel *heading;
+    UILabel *heading;
 }
 @end
 
@@ -195,12 +195,12 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 @implementation SRFooterHyperlinkView
 
 - (id)initWithSpecifier:(id)specifier {
-	self = [super initWithSpecifier:specifier];
-	NSString *SNSID = [specifier propertyForKey: @"SNSID"];
-	[self setURL: [self getSNSURLForUserName:SNSID]];
-	NSUInteger length = [[self text] length];
+    self = [super initWithSpecifier:specifier];
+    NSString *SNSID = [specifier propertyForKey: @"SNSID"];
+    [self setURL: [self getSNSURLForUserName:SNSID]];
+    NSUInteger length = [[self text] length];
     [self setLinkRange: NSMakeRange(length-1,1)];
-	return self;
+    return self;
 }
 
 @end

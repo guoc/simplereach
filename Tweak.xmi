@@ -20,8 +20,8 @@
 
 @interface SBReachabilityManager
 @property(readonly, assign, nonatomic) BOOL reachabilityModeActive;
-+(id)sharedInstance;
--(void)_handleReachabilityActivated;
++ (id)sharedInstance;
+- (void)_handleReachabilityActivated;
 - (void)_handleReachabilityDeactivated;
 @end
 
@@ -39,13 +39,13 @@
 @end
 
 typedef NS_ENUM(NSUInteger, BiometricEventType) {
-	BiometricEventTypeFingerUp = 0,
-	BiometricEventTypeFingerDown = 1
+    BiometricEventTypeFingerUp = 0,
+    BiometricEventTypeFingerDown = 1
 };
 
 @protocol SBUIBiometricEventMonitorDelegate
 @required
--(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
+- (void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
 @end
 
 @interface SBUIBiometricEventMonitor : NSObject
@@ -119,53 +119,53 @@ void prefsChanged();
 // http://iphonedevwiki.net/index.php/BiometricKit.framework
 // https://github.com/Sassoty/BioTesting
 @interface SRBiometricEventObserver : NSObject <SBUIBiometricEventMonitorDelegate> {
-	BOOL observerAdded;
+    BOOL observerAdded;
 }
-+(id)sharedInstance;
--(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
--(void)addObserverIfNecessary;
++ (id)sharedInstance;
+- (void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
+- (void)addObserverIfNecessary;
 @end
 
 @implementation SRBiometricEventObserver
 
-+(id)sharedInstance {
-	RETURN_IF_DISABLED(nil)
-	static id sharedInstance = nil;
-	static dispatch_once_t token = 0;
-	dispatch_once(&token, ^{
-		sharedInstance = [self new];
-	});
-	return sharedInstance;
++ (id)sharedInstance {
+    RETURN_IF_DISABLED(nil)
+    static id sharedInstance = nil;
+    static dispatch_once_t token = 0;
+    dispatch_once(&token, ^{
+        sharedInstance = [self new];
+    });
+    return sharedInstance;
 }
 
--(void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event {
-	RETURN_IF_DISABLED({})
-	if (!enabled) { return; }
-	if (event != BiometricEventTypeFingerDown) {
-		return;
-	}
-	cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
-	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(timeToForgetTime);
-	shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = YES;
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, timeToForgetTime * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-		if (!touchInScreen) {
-			shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
-		}
-		// else: reset when touch leave screen
-	});
-	hasReached = NO;
-	leaveTouchIDTime = CACurrentMediaTime();
+- (void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event {
+    RETURN_IF_DISABLED({})
+    if (!enabled) { return; }
+    if (event != BiometricEventTypeFingerDown) {
+        return;
+    }
+    cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary();
+    restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(timeToForgetTime);
+    shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, timeToForgetTime * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if (!touchInScreen) {
+            shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
+        }
+        // else: reset when touch leave screen
+    });
+    hasReached = NO;
+    leaveTouchIDTime = CACurrentMediaTime();
 }
 
--(void)addObserverIfNecessary {
-	RETURN_IF_DISABLED({})
-	if(observerAdded) {
-		return;
-	}
-	observerAdded = YES;
+- (void)addObserverIfNecessary {
+    RETURN_IF_DISABLED({})
+    if(observerAdded) {
+        return;
+    }
+    observerAdded = YES;
 
-	SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
-	[monitor addObserver:self];
+    SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
+    [monitor addObserver:self];
 }
 
 @end
@@ -173,60 +173,60 @@ void prefsChanged();
 
 
 typedef NS_ENUM(NSInteger, SRAngle) {
-	SRAngle_45,
-	SRAngle_60,
-	SRAngle_90
+    SRAngle_45,
+    SRAngle_60,
+    SRAngle_90
 };
 
 static NSInteger getAngleFromDirection(CGPoint direction) {
-	RETURN_IF_DISABLED(SRAngle_90);
-	if (direction.x == 0.0) {
-		return SRAngle_90;
-	}
-	CGFloat tangent = fabs(direction.y / direction.x);
-	if (tangent < 1.732) { // tan 60
-		return SRAngle_45;
-	} else if (tangent < 5.67) { // tan 80
-		return SRAngle_60;
-	} else {
-		return SRAngle_90;
-	}
+    RETURN_IF_DISABLED(SRAngle_90);
+    if (direction.x == 0.0) {
+        return SRAngle_90;
+    }
+    CGFloat tangent = fabs(direction.y / direction.x);
+    if (tangent < 1.732) { // tan 60
+        return SRAngle_45;
+    } else if (tangent < 5.67) { // tan 80
+        return SRAngle_60;
+    } else {
+        return SRAngle_90;
+    }
 }
 
 static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
-	RETURN_IF_DISABLED(0.0)
-	SRAngle angle = getAngleFromDirection(direction);
-	CGFloat degree;
-	switch (angle) {
-		case SRAngle_45:
-		    degree = degree_45;
-		    break;
-		case SRAngle_60:
-		    degree = degree_60;
-		    break;
-		case SRAngle_90:
-		    degree = degree_90;
-		    break;
-	}
-	return (degree - 2.0) * oneLineIconsHeightFactor;
+    RETURN_IF_DISABLED(0.0)
+    SRAngle angle = getAngleFromDirection(direction);
+    CGFloat degree;
+    switch (angle) {
+        case SRAngle_45:
+            degree = degree_45;
+            break;
+        case SRAngle_60:
+            degree = degree_60;
+            break;
+        case SRAngle_90:
+            degree = degree_90;
+            break;
+    }
+    return (degree - 2.0) * oneLineIconsHeightFactor;
 }
 
 static BOOL shouldDeactivateReachabilityForDirection(CGPoint direction) {
     RETURN_IF_DISABLED(NO)
-	SRAngle angle = getAngleFromDirection(direction);
-	BOOL deactivationRequired;
-	switch (angle) {
-		case SRAngle_45:
-		    deactivationRequired = taponce_45;
-			break;
-		case SRAngle_60:
-		    deactivationRequired = taponce_60;
-			break;
-		case SRAngle_90:
-		    deactivationRequired = taponce_90;
-			break;
-	}
-	return deactivationRequired;
+    SRAngle angle = getAngleFromDirection(direction);
+    BOOL deactivationRequired;
+    switch (angle) {
+        case SRAngle_45:
+            deactivationRequired = taponce_45;
+            break;
+        case SRAngle_60:
+            deactivationRequired = taponce_60;
+            break;
+        case SRAngle_90:
+            deactivationRequired = taponce_90;
+            break;
+    }
+    return deactivationRequired;
 }
 
 
@@ -239,43 +239,43 @@ static int tagePrefsSwipeUpCenterAction = -1;
 static BOOL tagePrefsSwipeUpCenterActionCaching = NO;
 
 static BOOL tageIsInstalled() {
-	// Don't need RETURN_IF_DISABLED
-	return [[NSFileManager defaultManager]fileExistsAtPath:TageDylibPath];
+    // Don't need RETURN_IF_DISABLED
+    return [[NSFileManager defaultManager]fileExistsAtPath:TageDylibPath];
 }
 
 static int readTagePrefsSwipeUpCenterAction() {
-	// Don't need RETURN_IF_DISABLED
-	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
-	return TAGE_PREF(intValue, "SwipeUpCenterAction", tagePrefsSwipeUpCenterActionDefaultValue);
+    // Don't need RETURN_IF_DISABLED
+    CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
+    return TAGE_PREF(intValue, "SwipeUpCenterAction", tagePrefsSwipeUpCenterActionDefaultValue);
 }
 
 static void writeTagePrefsSwipeUpCenterAction(int value) {
-	// Don't need RETURN_IF_DISABLED
-	NSNumber *number = [NSNumber numberWithInt: value];
-	CFPreferencesSetAppValue (CFSTR("SwipeUpCenterAction"), number, CFSTR(TAGE_DOMAIN));
-	CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
-	notify_post("com.clezz.tage.preferences-changed");
+    // Don't need RETURN_IF_DISABLED
+    NSNumber *number = [NSNumber numberWithInt: value];
+    CFPreferencesSetAppValue (CFSTR("SwipeUpCenterAction"), number, CFSTR(TAGE_DOMAIN));
+    CFPreferencesAppSynchronize(CFSTR(TAGE_DOMAIN));
+    notify_post("com.clezz.tage.preferences-changed");
 }
 
 static void cacheAndModifyTagePrefsSwipeUpCenterActionIfNecessary() {
-	RETURN_IF_DISABLED({})
-	if (!tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
-		tagePrefsSwipeUpCenterAction = readTagePrefsSwipeUpCenterAction();
-		tagePrefsSwipeUpCenterActionCaching = YES;
-		writeTagePrefsSwipeUpCenterAction(0);
-	}
+    RETURN_IF_DISABLED({})
+    if (!tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
+        tagePrefsSwipeUpCenterAction = readTagePrefsSwipeUpCenterAction();
+        tagePrefsSwipeUpCenterActionCaching = YES;
+        writeTagePrefsSwipeUpCenterAction(0);
+    }
 }
 
 static void restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(CGFloat delay) {
-	RETURN_IF_DISABLED({})
-	if (tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
-		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-			if (!touchInScreen && tagePrefsSwipeUpCenterActionCaching) {
-				tagePrefsSwipeUpCenterActionCaching = NO;
-				writeTagePrefsSwipeUpCenterAction(tagePrefsSwipeUpCenterAction);
-			}
-		});
-	}
+    RETURN_IF_DISABLED({})
+    if (tagePrefsSwipeUpCenterActionCaching && tageIsInstalled()) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (!touchInScreen && tagePrefsSwipeUpCenterActionCaching) {
+                tagePrefsSwipeUpCenterActionCaching = NO;
+                writeTagePrefsSwipeUpCenterAction(tagePrefsSwipeUpCenterAction);
+            }
+        });
+    }
 }
 
 
@@ -288,43 +288,43 @@ static BOOL pushabilityPrefsEnabled = 0;
 static BOOL pushabilityPrefsEnabledCaching = NO;
 
 static BOOL pushabilityIsInstalled() {
-	// Don't need RETURN_IF_DISABLED
-	return [[NSFileManager defaultManager]fileExistsAtPath:PushabilityDylibPath];
+    // Don't need RETURN_IF_DISABLED
+    return [[NSFileManager defaultManager]fileExistsAtPath:PushabilityDylibPath];
 }
 
 static BOOL readPushabilityPrefsEnabled() {
-	// Don't need RETURN_IF_DISABLED
-	CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
-	return PUSHABILITY_PREF(boolValue, "enabled", pushabilityPrefsEnabledDefaultValue);
+    // Don't need RETURN_IF_DISABLED
+    CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
+    return PUSHABILITY_PREF(boolValue, "enabled", pushabilityPrefsEnabledDefaultValue);
 }
 
 static void writePushabilityPrefsEnabled(BOOL value) {
-	// Don't need RETURN_IF_DISABLED
-	NSNumber *number = [NSNumber numberWithBool: value];
-	CFPreferencesSetAppValue (CFSTR("enabled"), number, CFSTR(PUSHABILITY_DOMAIN));
-	CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
-	notify_post("com.joshdoctors.pushability/settingschanged");
+    // Don't need RETURN_IF_DISABLED
+    NSNumber *number = [NSNumber numberWithBool: value];
+    CFPreferencesSetAppValue (CFSTR("enabled"), number, CFSTR(PUSHABILITY_DOMAIN));
+    CFPreferencesAppSynchronize(CFSTR(PUSHABILITY_DOMAIN));
+    notify_post("com.joshdoctors.pushability/settingschanged");
 }
 
 static void cacheAndModifyPushabilityPrefsEnabledIfNecessary() {
-	RETURN_IF_DISABLED({})
-	if (!pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
-		pushabilityPrefsEnabled = readPushabilityPrefsEnabled();
-		pushabilityPrefsEnabledCaching = YES;
-		writePushabilityPrefsEnabled(0);
-	}
+    RETURN_IF_DISABLED({})
+    if (!pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
+        pushabilityPrefsEnabled = readPushabilityPrefsEnabled();
+        pushabilityPrefsEnabledCaching = YES;
+        writePushabilityPrefsEnabled(0);
+    }
 }
 
 static void restorePushabilityPrefsEnabledIfNecessaryWithDelay(CGFloat delay) {
-	RETURN_IF_DISABLED({})
-	if (pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
-		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-			if (!touchInScreen && pushabilityPrefsEnabledCaching) {
-				pushabilityPrefsEnabledCaching = NO;
-				writePushabilityPrefsEnabled(pushabilityPrefsEnabled);
-			}
-		});
-	}
+    RETURN_IF_DISABLED({})
+    if (pushabilityPrefsEnabledCaching && pushabilityIsInstalled()) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (!touchInScreen && pushabilityPrefsEnabledCaching) {
+                pushabilityPrefsEnabledCaching = NO;
+                writePushabilityPrefsEnabled(pushabilityPrefsEnabled);
+            }
+        });
+    }
 }
 
 
@@ -332,11 +332,11 @@ static void restorePushabilityPrefsEnabledIfNecessaryWithDelay(CGFloat delay) {
 // Compatible with BioLockdown
 
 static void resetBiometricMatchingEnabled() {
-	RETURN_IF_DISABLED({})
-	SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
-	if ([monitor isMatchingEnabled]) {
-		[monitor _setMatchingEnabled: NO];
-	}
+    RETURN_IF_DISABLED({})
+    SBUIBiometricEventMonitor* monitor = [[objc_getClass("BiometricKit") manager] delegate];
+    if ([monitor isMatchingEnabled]) {
+        [monitor _setMatchingEnabled: NO];
+    }
 }
 
 
@@ -344,9 +344,9 @@ static void resetBiometricMatchingEnabled() {
 %hook SpringBoard
 
 - (void)applicationDidFinishLaunching:(id)arg1 {
-	// Don't need RETURN_IF_DISABLED
-	%orig;
-	[[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
+    // Don't need RETURN_IF_DISABLED
+    %orig;
+    [[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
 }
 
 %end
@@ -356,18 +356,18 @@ static void resetBiometricMatchingEnabled() {
 %hook SBControlCenterController
 
 - (void)beginTransitionWithTouchLocation:(CGPoint)touchLocation {
-	RETURN_IF_DISABLED(%orig)
-	if (hasReached || readyToReach) {
-		return;
-	}
-	if (leaveTouchIDTime == 0.0) {
-		return %orig;
-	}
-	CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
-	if(elapsedTime > timeToForgetTime) {
-		return %orig;
-	}
-	readyToReach = YES;
+    RETURN_IF_DISABLED(%orig)
+    if (hasReached || readyToReach) {
+        return;
+    }
+    if (leaveTouchIDTime == 0.0) {
+        return %orig;
+    }
+    CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
+    if(elapsedTime > timeToForgetTime) {
+        return %orig;
+    }
+    readyToReach = YES;
 }
 
 /* This is a fix for BioLockdown.
@@ -382,15 +382,15 @@ static void resetBiometricMatchingEnabled() {
  * device is locked (identity matching is required to unlock device).
  */
 - (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	if (arg1) {
-		return;
-	}
-	if ([[%c(SBUserAgent) sharedUserAgent] deviceIsLocked]) {
-		return;
-	}
-	resetBiometricMatchingEnabled();
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    if (arg1) {
+        return;
+    }
+    if ([[%c(SBUserAgent) sharedUserAgent] deviceIsLocked]) {
+        return;
+    }
+    resetBiometricMatchingEnabled();
 }
 
 %end
@@ -398,71 +398,71 @@ static void resetBiometricMatchingEnabled() {
 
 
 static void resetWhenLeaveScreen() {
-	// Don't need RETURN_IF_DISABLED
-	touchInScreen = NO;
-	readyToReach = NO;
-	leaveTouchIDTime = 0.0;
-	hasReached = NO;
-	restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
-	shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
+    // Don't need RETURN_IF_DISABLED
+    touchInScreen = NO;
+    readyToReach = NO;
+    leaveTouchIDTime = 0.0;
+    hasReached = NO;
+    restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
+    shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 }
 
 
 %hook SBUIController
 
 - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	touchInScreen = YES;
-	cacheAndModifyPushabilityPrefsEnabledIfNecessary();
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    touchInScreen = YES;
+    cacheAndModifyPushabilityPrefsEnabledIfNecessary();
 }
 
 - (void)_showControlCenterGestureCancelled {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	resetWhenLeaveScreen();
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureFailed {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	resetWhenLeaveScreen();
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    resetWhenLeaveScreen();
 }
 
 - (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	if (!readyToReach) {
-		return;
-	}
-	if (hasReached) {
-		return;
-	}
-	if (location.y > screenHeight - negligibleRegionHeight
-		|| pow((location.x - virtualCircleCenterX), 2) + pow((location.y - virtualCircleCenterY), 2) < pow(virtualCircleRadius, 2)
-	) {
-		return;
-	}
-	swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
-	yOffsetFactor_changeRequired = YES;
-	duration_changeRequired = YES;
-	ohwDisableRequired = YES;
-	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
-	[reachabilityManager _handleReachabilityActivated];
-	hasReached = YES;
-	readyToReach = NO;
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    if (!readyToReach) {
+        return;
+    }
+    if (hasReached) {
+        return;
+    }
+    if (location.y > screenHeight - negligibleRegionHeight
+        || pow((location.x - virtualCircleCenterX), 2) + pow((location.y - virtualCircleCenterY), 2) < pow(virtualCircleRadius, 2)
+    ) {
+        return;
+    }
+    swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
+    yOffsetFactor_changeRequired = YES;
+    duration_changeRequired = YES;
+    ohwDisableRequired = YES;
+    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
+    [reachabilityManager _handleReachabilityActivated];
+    hasReached = YES;
+    readyToReach = NO;
 }
 
 - (BOOL)shouldShowControlCenterTabControlOnFirstSwipe {
-	RETURN_IF_DISABLED(%orig)
-	BOOL r = %orig;
-	if (!r) {
-		return r;
-	}
-	if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
-		return r;
-	}
-	return NO;
+    RETURN_IF_DISABLED(%orig)
+    BOOL r = %orig;
+    if (!r) {
+        return r;
+    }
+    if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
+        return r;
+    }
+    return NO;
 }
 
 %end
@@ -472,50 +472,50 @@ static void resetWhenLeaveScreen() {
 %hook SBReachabilityManager
 
 - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	if (!active) {
-		restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
-		yOffsetFactor_changeRequired = NO;
-		duration_changeRequired = NO;
-		ohwDisableRequired = NO;
-		swipeDirection = CGPointZero;
-	}
-	enableExpirationTimerForEndedInteractionOnce = NO;
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    if (!active) {
+        restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
+        yOffsetFactor_changeRequired = NO;
+        duration_changeRequired = NO;
+        ohwDisableRequired = NO;
+        swipeDirection = CGPointZero;
+    }
+    enableExpirationTimerForEndedInteractionOnce = NO;
 }
 
 - (void)enableExpirationTimerForEndedInteraction {
-	RETURN_IF_DISABLED(%orig)
-	%orig;
-	if (!enableExpirationTimerForEndedInteractionOnce) {
-	    enableExpirationTimerForEndedInteractionOnce = YES;
-		return;
-	}
-	if (!shouldDeactivateReachabilityForDirection(swipeDirection)) {
-		return;
-	}
-	SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
-	if (reachabilityManager.reachabilityModeActive) {
-		[reachabilityManager _handleReachabilityDeactivated];
-	}
+    RETURN_IF_DISABLED(%orig)
+    %orig;
+    if (!enableExpirationTimerForEndedInteractionOnce) {
+        enableExpirationTimerForEndedInteractionOnce = YES;
+        return;
+    }
+    if (!shouldDeactivateReachabilityForDirection(swipeDirection)) {
+        return;
+    }
+    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
+    if (reachabilityManager.reachabilityModeActive) {
+        [reachabilityManager _handleReachabilityDeactivated];
+    }
 }
 
 - (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
-	RETURN_IF_DISABLED(%orig)
-	if (!duration_changeRequired) {
-		return %orig;
-	}
-	if (keepAliveDuration == 0.0) {
-		return %orig;
-	}
-	return %orig(keepAliveDuration);
+    RETURN_IF_DISABLED(%orig)
+    if (!duration_changeRequired) {
+        return %orig;
+    }
+    if (keepAliveDuration == 0.0) {
+        return %orig;
+    }
+    return %orig(keepAliveDuration);
 }
 
 - (BOOL)ohw_shouldOverwriteReachability {
-	if (!ohwDisableRequired) {
-		return %orig;
-	}
-	return NO;
+    if (!ohwDisableRequired) {
+        return %orig;
+    }
+    return NO;
 }
 
 %end
@@ -525,19 +525,19 @@ static void resetWhenLeaveScreen() {
 %hook SBReachabilitySettings
 
 - (CGFloat)yOffsetFactor {
-	RETURN_IF_DISABLED(%orig)
-	CGFloat origOffset = %orig;
-	if (!yOffsetFactor_changeRequired) {
-		return origOffset;
-	}
-	CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
-	if (newOffset < minimumYOffsetFactor) {
-		return minimumYOffsetFactor;
-	}
-	if (newOffset > maximumYOffsetFactor) {
-		return maximumYOffsetFactor;
-	}
-	return newOffset;
+    RETURN_IF_DISABLED(%orig)
+    CGFloat origOffset = %orig;
+    if (!yOffsetFactor_changeRequired) {
+        return origOffset;
+    }
+    CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
+    if (newOffset < minimumYOffsetFactor) {
+        return minimumYOffsetFactor;
+    }
+    if (newOffset > maximumYOffsetFactor) {
+        return maximumYOffsetFactor;
+    }
+    return newOffset;
 }
 
 %end
@@ -545,22 +545,22 @@ static void resetWhenLeaveScreen() {
 
 
 static void reloadPrefs() {
-	CFPreferencesAppSynchronize(CFSTR(SIMPLEREACH_DOMAIN));
-	enabled = PREF(boolValue, "Enable", YES);
-	degree_90 = PREF(intValue, "degree_90", 3);
-	degree_60 = PREF(intValue, "degree_60", 4);
-	degree_45 = PREF(intValue, "degree_45", 5);
-	keepAliveDuration = PREF(doubleValue, "KeepAliveDuration", 1.5);
-	taponce_90 = PREF(boolValue, "taponce_90", NO);
-	taponce_60 = PREF(boolValue, "taponce_60", NO);
-	taponce_45 = PREF(boolValue, "taponce_45", YES);
+    CFPreferencesAppSynchronize(CFSTR(SIMPLEREACH_DOMAIN));
+    enabled = PREF(boolValue, "Enable", YES);
+    degree_90 = PREF(intValue, "degree_90", 3);
+    degree_60 = PREF(intValue, "degree_60", 4);
+    degree_45 = PREF(intValue, "degree_45", 5);
+    keepAliveDuration = PREF(doubleValue, "KeepAliveDuration", 1.5);
+    taponce_90 = PREF(boolValue, "taponce_90", NO);
+    taponce_60 = PREF(boolValue, "taponce_60", NO);
+    taponce_45 = PREF(boolValue, "taponce_45", YES);
 }
 
 void prefsChanged() {
-	reloadPrefs();
+    reloadPrefs();
 }
 
 %ctor {
-	reloadPrefs();
-	CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)prefsChanged, CFSTR("com.gviridis.simplereach.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    reloadPrefs();
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)prefsChanged, CFSTR("com.gviridis.simplereach.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
