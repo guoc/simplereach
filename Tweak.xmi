@@ -702,7 +702,7 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
 
 
 
-%group iOS_8_and_9
+%group iOS_8
     %hook SBReachabilityManager
     - (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
         RETURN_IF_DISABLED(%orig)
@@ -713,6 +713,21 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
             return %orig;
         }
         return %orig(keepAliveDuration);
+    }
+    %end
+%end
+
+%group iOS_9
+    %hook SBReachabilitySettings
+    - (CGFloat)reachabilityInteractiveKeepAlive {
+        RETURN_IF_DISABLED(%orig)
+        if (!duration_changeRequired) {
+            return %orig;
+        }
+        if (keepAliveDuration == 0.0) {
+            return %orig;
+        }
+        return keepAliveDuration;
     }
     %end
 %end
