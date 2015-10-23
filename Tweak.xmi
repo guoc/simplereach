@@ -343,20 +343,17 @@ static void resetBiometricMatchingEnabled() {
 }
 
 
-
-%hook SpringBoard
-
-- (void)applicationDidFinishLaunching:(id)arg1 {
-    // Don't need RETURN_IF_DISABLED
-    %orig;
-    [[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
-}
-
+%group iOS_8_and_9
+    %hook SpringBoard
+    - (void)applicationDidFinishLaunching:(id)arg1 {
+        // Don't need RETURN_IF_DISABLED
+        %orig;
+        [[SRBiometricEventObserver sharedInstance] addObserverIfNecessary];
+    }
+    %end
 %end
 
 
-
-%hook SBControlCenterController
 
 /* This is a fix for BioLockdown.
  * To enter protected apps TWICE successively cause BioLockdown not reset
@@ -369,18 +366,20 @@ static void resetBiometricMatchingEnabled() {
  * The function below is called when Control Center is dismissed, except when
  * device is locked (identity matching is required to unlock device).
  */
-- (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    if (arg1) {
-        return;
+%group iOS_8_and_9
+    %hook SBControlCenterController
+    - (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        if (arg1) {
+            return;
+        }
+        if ([[%c(SBUserAgent) sharedUserAgent] deviceIsLocked]) {
+            return;
+        }
+        resetBiometricMatchingEnabled();
     }
-    if ([[%c(SBUserAgent) sharedUserAgent] deviceIsLocked]) {
-        return;
-    }
-    resetBiometricMatchingEnabled();
-}
-
+    %end
 %end
 
 
@@ -422,211 +421,273 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
 
 
 %group iOS_8
-
-%hook SBControlCenterController
-
-- (void)beginTransitionWithTouchLocation:(CGPoint)touchLocation {
-    RETURN_IF_DISABLED(%orig)
-    if (hasReached || readyToReach) {
-        return;
+    %hook SBUIController
+    - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        touchInScreen = YES;
+        cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }
-    if (leaveTouchIDTime == 0.0) {
-        return %orig;
-    }
-    CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
-    if(elapsedTime > timeToForgetTime) {
-        return %orig;
-    }
-    readyToReach = YES;
-}
 
+    %end
 %end
 
-%hook SBUIController
-
-- (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    touchInScreen = YES;
-    cacheAndModifyPushabilityPrefsEnabledIfNecessary();
-}
-
-- (void)_showControlCenterGestureCancelled {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    resetWhenLeaveScreen();
-}
-
-- (void)_showControlCenterGestureFailed {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    resetWhenLeaveScreen();
-}
-
-- (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    activateReachabilityIfNecessaryWithTouchLocation(location);
-}
-
-- (BOOL)shouldShowControlCenterTabControlOnFirstSwipe {
-    RETURN_IF_DISABLED(%orig)
-    BOOL r = %orig;
-    if (!r) {
-        return r;
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureBeganWithGestureRecognizer:(id)arg1 {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        touchInScreen = YES;
+        cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }
-    if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
-        return r;
-    }
-    return NO;
-}
-
+    %end
 %end
 
+
+
+%group iOS_8
+    %hook SBUIController
+    - (void)_showControlCenterGestureCancelled {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        resetWhenLeaveScreen();
+    }
+    %end
+%end
+
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureCancelled {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        resetWhenLeaveScreen();
+    }
+    %end
+%end
+
+
+
+%group iOS_8
+    %hook SBUIController
+    - (void)_showControlCenterGestureFailed {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        resetWhenLeaveScreen();
+    }
+    %end
+%end
+
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureFailed {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        resetWhenLeaveScreen();
+    }
+    %end
 %end
 
 
 
 %group iOS_9
-
-%hook SBControlCenterController
-
-- (void)_beginTransitionWithTouchLocation:(CGPoint)touchLocation {
-    RETURN_IF_DISABLED(%orig)
-    if (hasReached || readyToReach) {
-        return;
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureEndedWithGestureRecognizer:(id)arg1 {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        resetWhenLeaveScreen();
     }
-    if (leaveTouchIDTime == 0.0) {
-        return %orig;
-    }
-    CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
-    if(elapsedTime > timeToForgetTime) {
-        return %orig;
-    }
-    readyToReach = YES;
-}
-
-- (void)_showControlCenterGestureBeganWithGestureRecognizer:(id)arg1 {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    touchInScreen = YES;
-    cacheAndModifyPushabilityPrefsEnabledIfNecessary();
-}
-
-- (void)_showControlCenterGestureCancelled {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    resetWhenLeaveScreen();
-}
-
-- (void)_showControlCenterGestureFailed {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    resetWhenLeaveScreen();
-}
-
-- (void)_showControlCenterGestureEndedWithGestureRecognizer:(id)arg1 {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    resetWhenLeaveScreen();
-}
-
-- (void)_showControlCenterGestureChangedWithGestureRecognizer:(UIGestureRecognizer *)gestureRecognizer {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    CGPoint location = [gestureRecognizer locationInView:nil];
-    activateReachabilityIfNecessaryWithTouchLocation(location);
-}
-
-- (_Bool)_shouldShowGrabberOnFirstSwipe {
-    RETURN_IF_DISABLED(%orig)
-    BOOL r = %orig;
-    if (!r) {
-        return r;
-    }
-    if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
-        return r;
-    }
-    return NO;
-}
-
-%end
-
+    %end
 %end
 
 
 
-%hook SBReachabilityManager
+%group iOS_8
+    %hook SBUIController
+    - (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        activateReachabilityIfNecessaryWithTouchLocation(location);
+    }
+    %end
+%end
 
-- (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    if (!active) {
-        restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
-        yOffsetFactor_changeRequired = NO;
-        duration_changeRequired = NO;
-        ohwDisableRequired = NO;
-        swipeDirection = CGPointZero;
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureChangedWithGestureRecognizer:(UIGestureRecognizer *)gestureRecognizer {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        CGPoint location = [gestureRecognizer locationInView:nil];
+        activateReachabilityIfNecessaryWithTouchLocation(location);
     }
-    enableExpirationTimerForEndedInteractionOnce = NO;
-}
-
-- (void)enableExpirationTimerForEndedInteraction {
-    RETURN_IF_DISABLED(%orig)
-    %orig;
-    if (!enableExpirationTimerForEndedInteractionOnce) {
-        enableExpirationTimerForEndedInteractionOnce = YES;
-        return;
-    }
-    if (!shouldDeactivateReachabilityForDirection(swipeDirection)) {
-        return;
-    }
-    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
-    if (reachabilityManager.reachabilityModeActive) {
-        [reachabilityManager _handleReachabilityDeactivated];
-    }
-}
-
-- (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
-    RETURN_IF_DISABLED(%orig)
-    if (!duration_changeRequired) {
-        return %orig;
-    }
-    if (keepAliveDuration == 0.0) {
-        return %orig;
-    }
-    return %orig(keepAliveDuration);
-}
-
-- (BOOL)ohw_shouldOverwriteReachability {
-    if (!ohwDisableRequired) {
-        return %orig;
-    }
-    return NO;
-}
-
+    %end
 %end
 
 
 
-%hook SBReachabilitySettings
+%group iOS_8
+    %hook SBUIController
+    - (BOOL)shouldShowControlCenterTabControlOnFirstSwipe {
+        RETURN_IF_DISABLED(%orig)
+        BOOL r = %orig;
+        if (!r) {
+            return r;
+        }
+        if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
+            return r;
+        }
+        return NO;
+    }
+    %end
+%end
 
-- (CGFloat)yOffsetFactor {
-    RETURN_IF_DISABLED(%orig)
-    CGFloat origOffset = %orig;
-    if (!yOffsetFactor_changeRequired) {
-        return origOffset;
+%group iOS_9
+    %hook SBControlCenterController
+    - (_Bool)_shouldShowGrabberOnFirstSwipe {
+        RETURN_IF_DISABLED(%orig)
+        BOOL r = %orig;
+        if (!r) {
+            return r;
+        }
+        if (!shouldShowControlCenterTabControlOnFirstSwipe_changeRequired) {
+            return r;
+        }
+        return NO;
     }
-    CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
-    if (newOffset < minimumYOffsetFactor) {
-        return minimumYOffsetFactor;
-    }
-    if (newOffset > maximumYOffsetFactor) {
-        return maximumYOffsetFactor;
-    }
-    return newOffset;
-}
+    %end
+%end
 
+
+
+%group iOS_8
+    %hook SBControlCenterController
+    - (void)beginTransitionWithTouchLocation:(CGPoint)touchLocation {
+        RETURN_IF_DISABLED(%orig)
+        if (hasReached || readyToReach) {
+            return;
+        }
+        if (leaveTouchIDTime == 0.0) {
+            return %orig;
+        }
+        CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
+        if(elapsedTime > timeToForgetTime) {
+            return %orig;
+        }
+        readyToReach = YES;
+    }
+    %end
+%end
+
+
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_beginTransitionWithTouchLocation:(CGPoint)touchLocation {
+        RETURN_IF_DISABLED(%orig)
+        if (hasReached || readyToReach) {
+            return;
+        }
+        if (leaveTouchIDTime == 0.0) {
+            return %orig;
+        }
+        CFTimeInterval elapsedTime = CACurrentMediaTime() - leaveTouchIDTime;
+        if(elapsedTime > timeToForgetTime) {
+            return %orig;
+        }
+        readyToReach = YES;
+    }
+    %end
+%end
+
+
+
+%group iOS_8_and_9
+    %hook SBReachabilityManager
+    - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        if (!active) {
+            restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
+            yOffsetFactor_changeRequired = NO;
+            duration_changeRequired = NO;
+            ohwDisableRequired = NO;
+            swipeDirection = CGPointZero;
+        }
+        enableExpirationTimerForEndedInteractionOnce = NO;
+    }
+    %end
+%end
+
+
+
+%group iOS_8_and_9
+    %hook SBReachabilityManager
+    - (void)enableExpirationTimerForEndedInteraction {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        if (!enableExpirationTimerForEndedInteractionOnce) {
+            enableExpirationTimerForEndedInteractionOnce = YES;
+            return;
+        }
+        if (!shouldDeactivateReachabilityForDirection(swipeDirection)) {
+            return;
+        }
+        SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
+        if (reachabilityManager.reachabilityModeActive) {
+            [reachabilityManager _handleReachabilityDeactivated];
+        }
+    }
+    %end
+%end
+
+
+
+%group iOS_8_and_9
+    %hook SBReachabilityManager
+    - (void)_setKeepAliveTimerForDuration:(CGFloat)duration {
+        RETURN_IF_DISABLED(%orig)
+        if (!duration_changeRequired) {
+            return %orig;
+        }
+        if (keepAliveDuration == 0.0) {
+            return %orig;
+        }
+        return %orig(keepAliveDuration);
+    }
+    %end
+%end
+
+
+
+%group iOS_8_and_9
+    %hook SBReachabilityManager
+    - (BOOL)ohw_shouldOverwriteReachability {
+        if (!ohwDisableRequired) {
+            return %orig;
+        }
+        return NO;
+    }
+    %end
+%end
+
+
+
+%group iOS_8_and_9
+    %hook SBReachabilitySettings
+    - (CGFloat)yOffsetFactor {
+        RETURN_IF_DISABLED(%orig)
+        CGFloat origOffset = %orig;
+        if (!yOffsetFactor_changeRequired) {
+            return origOffset;
+        }
+        CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
+        if (newOffset < minimumYOffsetFactor) {
+            return minimumYOffsetFactor;
+        }
+        if (newOffset > maximumYOffsetFactor) {
+            return maximumYOffsetFactor;
+        }
+        return newOffset;
+    }
+    %end
 %end
 
 
@@ -648,7 +709,7 @@ void prefsChanged() {
 }
 
 %ctor {
-    %init;
+    %init(iOS_8_and_9);
     if (IS_IOS_OR_NEWER(iOS_9_0)) {
         %init(iOS_9);
     } else {
