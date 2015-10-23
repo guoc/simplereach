@@ -182,6 +182,7 @@ typedef NS_ENUM(NSInteger, SRAngle) {
 };
 
 static NSInteger getAngleFromDirection(CGPoint direction) {
+    assert(!CGPointEqualToPoint(direction, CGPointZero));
     RETURN_IF_DISABLED(SRAngle_90);
     if (direction.x == 0.0) {
         return SRAngle_90;
@@ -197,6 +198,7 @@ static NSInteger getAngleFromDirection(CGPoint direction) {
 }
 
 static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
+    assert(!CGPointEqualToPoint(direction, CGPointZero));
     RETURN_IF_DISABLED(0.0)
     SRAngle angle = getAngleFromDirection(direction);
     CGFloat degree;
@@ -215,6 +217,7 @@ static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
 }
 
 static BOOL shouldDeactivateReachabilityForDirection(CGPoint direction) {
+    assert(!CGPointEqualToPoint(direction, CGPointZero));
     RETURN_IF_DISABLED(NO)
     SRAngle angle = getAngleFromDirection(direction);
     BOOL deactivationRequired;
@@ -618,7 +621,7 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
 
 
 
-%group iOS_8_and_9
+%group iOS_8
     %hook SBReachabilityManager
     - (void)enableExpirationTimerForEndedInteraction {
         RETURN_IF_DISABLED(%orig)
@@ -636,6 +639,65 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
         }
     }
     %end
+%end
+
+%group iOS_9
+    #include <IOKit/hid/IOHIDEventSystem.h>
+    #include <IOKit/hid/IOHIDEventSystemClient.h>
+    #include <stdio.h>
+    #include <dlfcn.h>
+
+    typedef void* (*clientCreatePointer)(const CFAllocatorRef);
+
+    void handleIOHIDEvent(void* target, void* refcon, IOHIDServiceRef service, IOHIDEventRef event) {
+        static BOOL fingerWasOnScreen = NO;
+        static BOOL waitFingerLift = NO;
+
+        if (IOHIDEventGetType(event) != kIOHIDEventTypeDigitizer) {
+            return;
+        }
+
+        uint32_t flags = IOHIDEventGetEventFlags(event);
+        // 720915 touch on screen
+        // 524307 finger lift screen
+
+        if (!waitFingerLift && flags == 720915 && fingerWasOnScreen && hasReached) {
+            // Just activate Reachability by SimpleReach
+            waitFingerLift = YES;
+        }
+
+        if (!waitFingerLift && flags == 524307 && fingerWasOnScreen) {
+            SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
+            if (reachabilityManager.reachabilityModeActive) {
+                // Fingers first lift when Reachability is activated
+                if (CGPointEqualToPoint(swipeDirection, CGPointZero)) {
+                    // Reachability was activated by double tapping Touch ID
+                } else {
+                    // Reachability was activated by SimpleReach
+                    if (shouldDeactivateReachabilityForDirection(swipeDirection)) {
+                        [reachabilityManager _handleReachabilityDeactivated];
+                    }
+                }
+            }
+        }
+
+        if (flags == 720915) {
+            fingerWasOnScreen = YES;
+        }
+        if (flags == 524307) {
+            fingerWasOnScreen = NO;
+            waitFingerLift = NO;
+        }
+    }
+
+    void registerIOHIDEventHandler() {
+        clientCreatePointer clientCreate;
+        void *handle = dlopen(0, 9);
+        *(void**)(&clientCreate) = dlsym(handle,"IOHIDEventSystemClientCreate");
+        IOHIDEventSystemClientRef ioHIDEventSystem = (__IOHIDEventSystemClient *)clientCreate(kCFAllocatorDefault);
+        IOHIDEventSystemClientScheduleWithRunLoop(ioHIDEventSystem, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+        IOHIDEventSystemClientRegisterEventCallback(ioHIDEventSystem, (IOHIDEventSystemClientEventCallback)handleIOHIDEvent, NULL, NULL);
+    }
 %end
 
 
@@ -709,6 +771,10 @@ void prefsChanged() {
 }
 
 %ctor {
+    if (IS_IOS_OR_NEWER(iOS_9_0)) {
+        registerIOHIDEventHandler();
+    }
+
     %init(iOS_8_and_9);
     if (IS_IOS_OR_NEWER(iOS_9_0)) {
         %init(iOS_9);

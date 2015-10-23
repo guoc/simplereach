@@ -6,6 +6,7 @@ include theos/makefiles/common.mk
 TWEAK_NAME = simplereach
 simplereach_FILES = Tweak.xmi
 simplereach_FRAMEWORKS = UIKit CoreGraphics QuartzCore
+simplereach_PRIVATE_FRAMEWORKS = IOKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
