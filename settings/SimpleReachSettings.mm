@@ -2,8 +2,14 @@
 #import <MessageUI/MFMailComposeViewController.h>
 #import <sys/utsname.h>
 
+#include <objc/runtime.h>
+
 OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
 static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID");
+
+@interface LSApplicationProxy
+@property (nonatomic, readonly) NSString *applicationIdentifier;
+@end
 
 @interface PSListController()
 @property(nonatomic, readonly, retain) UINavigationController *navigationController;
@@ -30,25 +36,46 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
 
 // https://gist.github.com/vhbit/958738
 - (NSURL *)getSNSURLForUserName:(NSString *)userName {
-    NSArray *urls = [NSArray arrayWithObjects:
-        @"tweetbot:///user_profile/{username}"            // TweetBot
-   // , @"twitterrific:///profile?screen_name={username}" // Twitterrific
-      , @"echofon:///user_timeline?{username}"            // Echofon
-   // , @"tweetings:///user?screen_name={username}",      // Tweetings
-      , @"twitter:@{username}"                            // Twitter
-   // , @"moke:///user?domain={username}"                 // Moke
-      , @"http://gviridis.com/sns/{username}"
-      , nil];
-
-    UIApplication *application = [UIApplication sharedApplication];
-    for (NSString *candidate in urls) {
-        candidate = [candidate stringByReplacingOccurrencesOfString:@"{username}" withString:userName];
-        NSURL *url = [NSURL URLWithString:candidate];
-        if ([application canOpenURL:url]) {
-            return url;
+    // http://stackoverflow.com/a/27833902/3157231
+    Class LSApplicationWorkspace_class = objc_getClass("LSApplicationWorkspace");
+    NSObject *workspace = [LSApplicationWorkspace_class performSelector:@selector(defaultWorkspace)];
+    NSArray *allApps = [workspace performSelector:@selector(allApplications)];
+    NSArray *twitterAppIDs = @[
+     // @"com.moke.moke-2"            // Moke
+        @"com.tapbots.Tweetbot4"      // TweetBot
+      , @"com.tapbots.Tweetbot3"      // TweetBot
+   // , @"com.iconfactory.Blackbird"  // Twitterrific
+      , @"net.naan.TwitterFonPro"     // Echofon
+      , @"net.naan.TwitterFon"        // Echofon
+   // , @"net.tweetings.iphone"       // Tweetings
+   // , @"com.dwdesign.tweetingslite" // Tweetings
+      , @"com.atebits.Tweetie2"       // Twitter
+    ];
+    NSDictionary *urlStringsOfTwitterAppIDs = @{
+                  //  @"com.moke.moke-2" : @"moke:///user?domain={username}"                 // Moke
+                @"com.tapbots.Tweetbot4" : @"tweetbot:///user_profile/{username}"            // TweetBot
+              , @"com.tapbots.Tweetbot3" : @"tweetbot:///user_profile/{username}"            // TweetBot
+       // , @"com.iconfactory.Blackbird" : @"twitterrific:///profile?screen_name={username}" // Twitterrific
+             , @"net.naan.TwitterFonPro" : @"echofon:///user_timeline?{username}"            // Echofon
+                , @"net.naan.TwitterFon" : @"echofon:///user_timeline?{username}"            // Echofon
+            // , @"net.tweetings.iphone" : @"tweetings:///user?screen_name={username}"       // Tweetings
+      // , @"com.dwdesign.tweetingslite" : @"tweetings:///user?screen_name={username}"       // Tweetings
+               , @"com.atebits.Tweetie2" : @"twitter:@{username}"                            // Twitter
+    };
+    NSMutableSet *allAppIDs = [NSMutableSet setWithCapacity: 63];
+    for (LSApplicationProxy *app in allApps) {
+        [allAppIDs addObject:app.applicationIdentifier];
+    }
+    NSString *urlString = @"http://gviridis.com/sns/{username}";
+    for (NSString *twitterAppID in twitterAppIDs) {
+        if ([allAppIDs containsObject:twitterAppID]) {
+            urlString = urlStringsOfTwitterAppIDs[twitterAppID];
+            break;
         }
     }
-    return nil;
+    NSString *replacedUrlString = [urlString stringByReplacingOccurrencesOfString:@"{username}" withString:userName];
+    NSURL *url = [NSURL URLWithString:replacedUrlString];
+    return url;
 }
 
 @end
