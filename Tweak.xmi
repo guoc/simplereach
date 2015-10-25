@@ -93,6 +93,7 @@ static BOOL duration_changeRequired = NO;
 static BOOL ohwDisableRequired = NO;
 static BOOL hasReached = NO;
 static BOOL enableExpirationTimerForEndedInteractionOnce = NO;
+static BOOL canReceiveTapTimerFire = NO;
 static CGPoint swipeDirection = CGPointZero;
 static CFTimeInterval leaveTouchIDTime = 0.0;
 
@@ -392,7 +393,6 @@ static void resetWhenLeaveScreen() {
     touchInScreen = NO;
     readyToReach = NO;
     leaveTouchIDTime = 0.0;
-    hasReached = NO;
     restoreTagePrefsSwipeUpCenterActionIfNecessaryWithDelay(0.01);
     shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 }
@@ -609,6 +609,8 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
         %orig;
         if (!active) {
             restorePushabilityPrefsEnabledIfNecessaryWithDelay(0.01);
+            hasReached = NO;
+            canReceiveTapTimerFire = NO;
             yOffsetFactor_changeRequired = NO;
             duration_changeRequired = NO;
             ohwDisableRequired = NO;
@@ -652,6 +654,10 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
     void handleIOHIDEvent(void* target, void* refcon, IOHIDServiceRef service, IOHIDEventRef event) {
         static BOOL fingerWasOnScreen = NO;
         static BOOL waitFingerLift = NO;
+
+        if (hasReached && IOHIDEventGetType(event) == 29) {    // Touch ID down/up
+            canReceiveTapTimerFire = YES;
+        }
 
         if (IOHIDEventGetType(event) != kIOHIDEventTypeDigitizer) {
             return;
@@ -785,8 +791,69 @@ void prefsChanged() {
     reloadPrefs();
 }
 
+%group wait_virtualhome9
+    %hook SBReachabilityTrigger
+    - (void)tapTimerFired:(NSTimer *)timer {
+        if (hasReached && !canReceiveTapTimerFire) {
+            return;
+        }
+        %orig;
+    }
+    %end
+%end
+
+%group iOS_9
+    #import <Foundation/Foundation.h>
+    #import <mach-o/dyld.h>
+
+    static void add_image_callback(const struct mach_header* mh, intptr_t vmaddr_slide)    // Delay execute %init(wait_virtualhome9);
+    {
+        static BOOL hooked = NO;
+        static BOOL virtualhome9Loaded = NO;
+        static BOOL tapTimerFiredMethodReady = NO;
+
+        if (hooked) {
+            return;
+        }
+
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+        if (!virtualhome9Loaded) {
+            uint32_t count = _dyld_image_count();
+            uint32_t i = 0;
+        	for (; i < count; i++) {
+        		if (mh == _dyld_get_image_header(i)) {
+                    break;
+                }
+            }
+            if (i == count) {    // not found
+                return;
+            }
+            const char *imageName = _dyld_get_image_name(i);
+            if(strstr(imageName, "virtualhome9") != NULL) {
+                virtualhome9Loaded = YES;
+            }
+        }
+        if (!tapTimerFiredMethodReady) {
+            if ([%c(SBReachabilityTrigger) instancesRespondToSelector:@selector(tapTimerFired:)]) {
+                tapTimerFiredMethodReady = YES;
+            }
+        }
+        if (virtualhome9Loaded && tapTimerFiredMethodReady) {
+            %init(wait_virtualhome9);
+            hooked = YES;
+        }
+
+    	[pool drain];
+
+        return;
+    }
+%end
+
+
 %ctor {
     if (IS_IOS_OR_NEWER(iOS_9_0)) {
+        _dyld_register_func_for_add_image(add_image_callback);
         registerIOHIDEventHandler();
     }
 
