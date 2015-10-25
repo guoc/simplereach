@@ -10,10 +10,20 @@
 #define SIMPLEREACH_DOMAIN "com.gviridis.simplereach"
 #define TAGE_DOMAIN "com.clezz.tage"
 #define PUSHABILITY_DOMAIN "com.joshdoctors.pushability"
+#define VIRTUALHOME_DOMAIN "com.w00tylab.virtualhome"
 #define PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(SIMPLEREACH_DOMAIN)) method])
 #define TAGE_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(TAGE_DOMAIN)) method])
 #define PUSHABILITY_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(PUSHABILITY_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(PUSHABILITY_DOMAIN)) method])
+#define VIRTUALHOME_PREF(method, key, defaultValue) (!CFPreferencesCopyAppValue(CFSTR(key), CFSTR(VIRTUALHOME_DOMAIN)) ? (defaultValue) : [(id)CFPreferencesCopyAppValue(CFSTR(key), CFSTR(VIRTUALHOME_DOMAIN)) method])
 #define RETURN_IF_DISABLED(returnValue) if (!enabled) { return (returnValue); }
+#define DISABLE_REACHABILITY \
+    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance]; \
+    [reachabilityManager setReachabilityTemporarilyDisabled:YES forReason: [[NSMutableSet alloc] init]];
+#define ENABLE_REACHABILITY \
+    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance]; \
+    [reachabilityManager setReachabilityTemporarilyDisabled:NO forReason: [[NSMutableSet alloc] init]];
+#define ACTIVATE_REACHABILITY \
+    [[%c(SBReachabilityManager) sharedInstance] _handleReachabilityActivated];
 
 @interface SBUserAgent
 + (id)sharedUserAgent;
@@ -25,6 +35,7 @@
 + (id)sharedInstance;
 - (void)_handleReachabilityActivated;
 - (void)_handleReachabilityDeactivated;
+- (void)setReachabilityTemporarilyDisabled:(_Bool)arg1 forReason:(id)arg2;
 @end
 
 @interface SBGestureRecognizer
@@ -237,6 +248,30 @@ static BOOL shouldDeactivateReachabilityForDirection(CGPoint direction) {
 
 
 
+/************* Compatible with VirtualHome **************/
+
+NSString *const VirtualHomeDylibPath = @"/Library/MobileSubstrate/DynamicLibraries/virtualhome8.dylib";
+NSString *const VirtualHomePrefsPath = @"/var/mobile/Library/Preferences/com.w00tylab.virtualhome.plist";
+double const virtualhomePrefsDoubleTapSlideDefaultValue = 0.2;
+
+static BOOL virtualhomeIsInstalled() {
+    // Don't need RETURN_IF_DISABLED
+    return [[NSFileManager defaultManager]fileExistsAtPath:VirtualHomeDylibPath];
+}
+
+static double readVirtualHomePrefsDoubleTapSlide() {
+    // Don't need RETURN_IF_DISABLED
+    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:VirtualHomePrefsPath];
+    id prefObj = [plist objectForKey:@"doubletap.slider"];
+    if (prefObj) {
+        return [prefObj doubleValue];
+    } else {
+        return virtualhomePrefsDoubleTapSlideDefaultValue;
+    }
+}
+
+
+
 /************* Compatible with Tage **************/
 
 NSString *const TageDylibPath = @"/Library/MobileSubstrate/DynamicLibraries/Tage.dylib";
@@ -415,8 +450,15 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
     yOffsetFactor_changeRequired = YES;
     duration_changeRequired = YES;
     ohwDisableRequired = YES;
-    SBReachabilityManager *reachabilityManager = [%c(SBReachabilityManager) sharedInstance];
-    [reachabilityManager _handleReachabilityActivated];
+    if (virtualhomeIsInstalled()) {
+        ENABLE_REACHABILITY
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.001 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        ACTIVATE_REACHABILITY
+        if (virtualhomeIsInstalled()) {
+            DISABLE_REACHABILITY
+        }
+    });
     hasReached = YES;
     readyToReach = NO;
 }
@@ -441,6 +483,13 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
         RETURN_IF_DISABLED(%orig)
         %orig;
         touchInScreen = YES;
+        if (virtualhomeIsInstalled()) {
+            DISABLE_REACHABILITY
+            double delay = readVirtualHomePrefsDoubleTapSlide();
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                ENABLE_REACHABILITY
+            });
+        }
         cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }
     %end
