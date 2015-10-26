@@ -78,7 +78,8 @@ CGFloat const minimumYOffsetFactor = 0.1;
 CGFloat const maximumYOffsetFactor = 0.75;
 CGFloat const screenWidth = [[UIScreen mainScreen] bounds].size.width;
 CGFloat const screenHeight = [[UIScreen mainScreen] bounds].size.height;
-CGFloat const oneLineIconsHeight = screenHeight == 736.0 ? 150.0 : 88.0;
+CGFloat const oneLineIconsHeight = screenHeight == 736.0 ? 100.0 : 88.0;
+NSUInteger const systemReachabilityShiftDownDefaultLinesNumber = screenHeight == 736.0 ? 3 : 2;
 CGFloat const distanceFromHomeButtonCenterToScreenBottom = 42;
 CGFloat const negligibleRegionHeight = 20;
 CGFloat const distanceFromScreenBottomToVirtualCircleTop = screenHeight == 736.0 ? 120.0 : 82.0;
@@ -226,7 +227,7 @@ static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
             degree = degree_90;
             break;
     }
-    return (degree - 2.0) * oneLineIconsHeightFactor;
+    return (degree - systemReachabilityShiftDownDefaultLinesNumber) * oneLineIconsHeightFactor;
 }
 
 static BOOL shouldDeactivateReachabilityForDirection(CGPoint direction) {

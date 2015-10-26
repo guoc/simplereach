@@ -1,7 +1,7 @@
 Package: com.gviridis.simplereach
 Name: SimpleReach
 Depends: mobilesubstrate (>= 0.9.5000), preferenceloader (>= 2.2.2), firmware (>= 8.0)
-Version: 1.3.6
+Version: 1.3.7
 Architecture: iphoneos-arm
 Description: Reach screen top easily (better Reachability)
 Depiction: http://moreinfo.thebigboss.org/moreinfo/depiction.php?file=simplereachDp
