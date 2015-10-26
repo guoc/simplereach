@@ -36,6 +36,7 @@
 - (void)_handleReachabilityActivated;
 - (void)_handleReachabilityDeactivated;
 - (void)setReachabilityTemporarilyDisabled:(_Bool)arg1 forReason:(id)arg2;
+@property(nonatomic) _Bool reachabilityEnabled;
 @end
 
 @interface SBGestureRecognizer
@@ -104,6 +105,7 @@ static BOOL duration_changeRequired = NO;
 static BOOL ohwDisableRequired = NO;
 static BOOL hasReached = NO;
 static BOOL enableExpirationTimerForEndedInteractionOnce = NO;
+static BOOL needFurtherDisableReachabilityForVirtualHome = YES;    // Of course, this variable should be ignored if virtualhomeIsInstalled() is NO
 static CGPoint swipeDirection = CGPointZero;
 static CFTimeInterval leaveTouchIDTime = 0.0;
 
@@ -450,15 +452,28 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
     yOffsetFactor_changeRequired = YES;
     duration_changeRequired = YES;
     ohwDisableRequired = YES;
-    if (virtualhomeIsInstalled()) {
-        ENABLE_REACHABILITY
-    }
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.001 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+
+    if (!virtualhomeIsInstalled()) {
         ACTIVATE_REACHABILITY
-        if (virtualhomeIsInstalled()) {
-            DISABLE_REACHABILITY
+    } else {
+        if (!needFurtherDisableReachabilityForVirtualHome) {
+            // Delayed reachability enable operation has been done,
+            // this means the time of VirtualHome's doubletap.slider setting has passed,
+            // it is not necessary to enable reachability and disable reachability again.
+            ACTIVATE_REACHABILITY
+        } else {
+            ENABLE_REACHABILITY
+            // ENABLE_REACHABILITY was just executed,
+            // reachability activation has to be delayed to wait reachability enabled.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.001 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                ACTIVATE_REACHABILITY
+                if (needFurtherDisableReachabilityForVirtualHome) {
+                    DISABLE_REACHABILITY
+                }
+            });
         }
-    });
+    }
+
     hasReached = YES;
     readyToReach = NO;
 }
@@ -485,9 +500,11 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
         touchInScreen = YES;
         if (virtualhomeIsInstalled()) {
             DISABLE_REACHABILITY
+            needFurtherDisableReachabilityForVirtualHome = YES;
             double delay = readVirtualHomePrefsDoubleTapSlide();
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                 ENABLE_REACHABILITY
+                needFurtherDisableReachabilityForVirtualHome = NO;
             });
         }
         cacheAndModifyPushabilityPrefsEnabledIfNecessary();
