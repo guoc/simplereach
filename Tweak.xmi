@@ -481,12 +481,25 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
 
 
 
+static void temporarilyDisableReachabilityForVirtualHome() {
+    if (virtualhomeIsInstalled()) {
+        DISABLE_REACHABILITY
+        needFurtherDisableReachabilityForVirtualHome = YES;
+        double delay = readVirtualHomePrefsDoubleTapSlide();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            ENABLE_REACHABILITY
+            needFurtherDisableReachabilityForVirtualHome = NO;
+        });
+    }
+}
+
 %group iOS_8
     %hook SBUIController
     - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
         RETURN_IF_DISABLED(%orig)
         %orig;
         touchInScreen = YES;
+        temporarilyDisableReachabilityForVirtualHome();
         cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }
 
@@ -499,15 +512,7 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
         RETURN_IF_DISABLED(%orig)
         %orig;
         touchInScreen = YES;
-        if (virtualhomeIsInstalled()) {
-            DISABLE_REACHABILITY
-            needFurtherDisableReachabilityForVirtualHome = YES;
-            double delay = readVirtualHomePrefsDoubleTapSlide();
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                ENABLE_REACHABILITY
-                needFurtherDisableReachabilityForVirtualHome = NO;
-            });
-        }
+        temporarilyDisableReachabilityForVirtualHome();
         cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }
     %end
