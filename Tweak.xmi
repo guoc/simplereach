@@ -86,7 +86,7 @@ CGFloat const distanceFromScreenBottomToVirtualCircleTop = screenHeight == 736.0
 CGFloat const virtualCircleRadius = distanceFromScreenBottomToVirtualCircleTop / 2.0 + (pow(screenWidth, 2) / distanceFromScreenBottomToVirtualCircleTop / 8.0);
 CGFloat const virtualCircleCenterX = screenWidth / 2.0;
 CGFloat const virtualCircleCenterY = screenHeight + virtualCircleRadius - distanceFromScreenBottomToVirtualCircleTop;
-CGPoint const touchIDCenter = CGPointMake(screenWidth / 2, screenHeight + distanceFromHomeButtonCenterToScreenBottom);
+CGPoint const homeButtonCenter = CGPointMake(screenWidth / 2, screenHeight + distanceFromHomeButtonCenterToScreenBottom);
 CGFloat const oneLineIconsHeightFactor = oneLineIconsHeight / screenHeight;
 
 static CGFloat degree_90 = 0.0;
@@ -108,9 +108,14 @@ static BOOL hasReached = NO;
 static BOOL enableExpirationTimerForEndedInteractionOnce = NO;
 static BOOL needFurtherDisableReachabilityForVirtualHome = YES;    // Of course, this variable should be ignored if virtualhomeIsInstalled() is NO
 static CGPoint swipeDirection = CGPointZero;
+static CGFloat swipeDistance = 0.0;
 static CFTimeInterval leaveTouchIDTime = 0.0;
 
-static CGFloat moreYOffsetFactorFromDirection(CGPoint p);
+static NSInteger getAngleFromDirection(CGPoint direction);
+static CGFloat moreYOffsetFactorFromDirectionAndDistance(CGPoint direction, CGFloat distance);
+static CGFloat distanceFromHomeButtonCenterToLocation(CGPoint location);
+static CGFloat distanceFromVirtualCircleCenterToLocation(CGPoint location);
+static BOOL locationIsInVirtualCircle(CGPoint location);
 static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location);
 
 // Compatible with Tage
@@ -211,7 +216,7 @@ static NSInteger getAngleFromDirection(CGPoint direction) {
     }
 }
 
-static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
+static CGFloat moreYOffsetFactorFromDirectionAndDistance(CGPoint direction, CGFloat distance) {
     assert(!CGPointEqualToPoint(direction, CGPointZero));
     RETURN_IF_DISABLED(0.0)
     SRAngle angle = getAngleFromDirection(direction);
@@ -227,7 +232,24 @@ static CGFloat moreYOffsetFactorFromDirection(CGPoint direction) {
             degree = degree_90;
             break;
     }
+    if ((angle == SRAngle_45 && NO) || (angle == SRAngle_60 && YES) || (angle == SRAngle_90 && YES)) {
+        if (distance > distanceFromHomeButtonCenterToScreenBottom + distanceFromScreenBottomToVirtualCircleTop * 2) {
+            degree += 1;
+        }
+    }
     return (degree - systemReachabilityShiftDownDefaultLinesNumber) * oneLineIconsHeightFactor;
+}
+
+static CGFloat distanceFromHomeButtonCenterToLocation(CGPoint location) {
+    return sqrt(pow((location.x - homeButtonCenter.x), 2) + pow((location.y - homeButtonCenter.y), 2));
+}
+
+static CGFloat distanceFromVirtualCircleCenterToLocation(CGPoint location) {
+    return sqrt(pow((location.x - virtualCircleCenterX), 2) + pow((location.y - virtualCircleCenterY), 2));
+}
+
+static BOOL locationIsInVirtualCircle(CGPoint location) {
+    return distanceFromVirtualCircleCenterToLocation(location) < virtualCircleRadius;
 }
 
 static BOOL shouldDeactivateReachabilityForDirection(CGPoint direction) {
@@ -444,12 +466,9 @@ static void activateReachabilityIfNecessaryWithTouchLocation(CGPoint location) {
     if (hasReached) {
         return;
     }
-    if (location.y > screenHeight - negligibleRegionHeight
-        || pow((location.x - virtualCircleCenterX), 2) + pow((location.y - virtualCircleCenterY), 2) < pow(virtualCircleRadius, 2)
-    ) {
+    if (location.y > screenHeight - negligibleRegionHeight || locationIsInVirtualCircle(location)) {
         return;
     }
-    swipeDirection = CGPointMake(location.x - touchIDCenter.x, location.y - touchIDCenter.y);
     yOffsetFactor_changeRequired = YES;
     duration_changeRequired = YES;
     ohwDisableRequired = YES;
@@ -564,11 +583,30 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 
 
 
-%group iOS_9
-    %hook SBControlCenterController
-    - (void)_showControlCenterGestureEndedWithGestureRecognizer:(id)arg1 {
+%group iOS_8
+    %hook SBUIController
+    - (void)_showControlCenterGestureEndedWithLocation:(CGPoint)location velocity:(CGPoint)velocity {
         RETURN_IF_DISABLED(%orig)
         %orig;
+        if (!CGPointEqualToPoint(swipeDirection, CGPointZero) && (getAngleFromDirection(swipeDirection) == SRAngle_90 || getAngleFromDirection(swipeDirection) == SRAngle_60)) {
+            swipeDistance = distanceFromHomeButtonCenterToLocation(location);
+            activateReachabilityIfNecessaryWithTouchLocation(location);
+        }
+        resetWhenLeaveScreen();
+    }
+    %end
+%end
+
+%group iOS_9
+    %hook SBControlCenterController
+    - (void)_showControlCenterGestureEndedWithGestureRecognizer:(UIGestureRecognizer *)gestureRecognizer {
+        RETURN_IF_DISABLED(%orig)
+        %orig;
+        if (!CGPointEqualToPoint(swipeDirection, CGPointZero) && (getAngleFromDirection(swipeDirection) == SRAngle_90 || getAngleFromDirection(swipeDirection) == SRAngle_60)) {
+            CGPoint location = [gestureRecognizer locationInView:nil];
+            swipeDistance = distanceFromHomeButtonCenterToLocation(location);
+            activateReachabilityIfNecessaryWithTouchLocation(location);
+        }
         resetWhenLeaveScreen();
     }
     %end
@@ -581,6 +619,10 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     - (void)_showControlCenterGestureChangedWithLocation:(CGPoint)location velocity:(CGPoint)velocity duration:(CGFloat)duration {
         RETURN_IF_DISABLED(%orig)
         %orig;
+        swipeDirection = CGPointMake(location.x - homeButtonCenter.x, location.y - homeButtonCenter.y);
+        if (CGPointEqualToPoint(swipeDirection, CGPointZero) || getAngleFromDirection(swipeDirection) == SRAngle_90 || getAngleFromDirection(swipeDirection) == SRAngle_60) {
+            return;
+        }
         activateReachabilityIfNecessaryWithTouchLocation(location);
     }
     %end
@@ -592,6 +634,10 @@ static void temporarilyDisableReachabilityForVirtualHome() {
         RETURN_IF_DISABLED(%orig)
         %orig;
         CGPoint location = [gestureRecognizer locationInView:nil];
+        swipeDirection = CGPointMake(location.x - homeButtonCenter.x, location.y - homeButtonCenter.y);
+        if (CGPointEqualToPoint(swipeDirection, CGPointZero) || getAngleFromDirection(swipeDirection) == SRAngle_90 || getAngleFromDirection(swipeDirection) == SRAngle_60) {
+            return;
+        }
         activateReachabilityIfNecessaryWithTouchLocation(location);
     }
     %end
@@ -827,7 +873,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
         if (!yOffsetFactor_changeRequired) {
             return origOffset;
         }
-        CGFloat newOffset = origOffset + moreYOffsetFactorFromDirection(swipeDirection);
+        CGFloat newOffset = origOffset + moreYOffsetFactorFromDirectionAndDistance(swipeDirection, swipeDistance);
         if (newOffset < minimumYOffsetFactor) {
             return minimumYOffsetFactor;
         }
