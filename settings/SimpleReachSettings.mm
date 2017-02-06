@@ -132,13 +132,25 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
         [mailComposeViewController setMessageBody: messageBody
                                            isHTML: NO];
 
-        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/var/mobile/Library/Preferences/com.gviridis.simplereach.plist"] mimeType:@"application/xml" fileName:@"com.gviridis.simplereach.plist"];
-        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/cydia.log"] mimeType:@"text/plain" fileName:@"cydia.log"];
+        NSString * const simplereachConfigPath = @"/var/mobile/Library/Preferences/com.gviridis.simplereach.plist";
+        NSString * const cydiaLogPath = @"/tmp/cydia.log";
+        NSString * const dpkglPath = @"/tmp/dpkgl.log";
+        NSString * const dpkgStatusPath = @"/var/lib/dpkg/status";
+        if ([[NSFileManager defaultManager] fileExistsAtPath:simplereachConfigPath]) {
+          [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:simplereachConfigPath] mimeType:@"application/xml" fileName:@"com.gviridis.simplereach.plist"];
+        }
+        if ([[NSFileManager defaultManager] fileExistsAtPath:cydiaLogPath]) {
+          [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:cydiaLogPath] mimeType:@"text/plain" fileName:@"cydia.log"];
+        }
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         system("/usr/bin/dpkg -l >/tmp/dpkgl.log");
         #pragma GCC diagnostic pop
-        [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:@"/tmp/dpkgl.log"] mimeType:@"text/plain" fileName:@"dpkgl.log"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:dpkglPath]) {
+          [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:dpkglPath] mimeType:@"text/plain" fileName:@"dpkgl.log"];
+        } else if ([[NSFileManager defaultManager] fileExistsAtPath:dpkgStatusPath]) {
+          [mailComposeViewController addAttachmentData:[NSData dataWithContentsOfFile:dpkgStatusPath] mimeType:@"text/plain" fileName:@"dpkgstatus.log"];
+        }
 
         mailComposeViewController.mailComposeDelegate = self;
 
@@ -173,7 +185,7 @@ static const CFStringRef kMobileDeviceUniqueIdentifier = CFSTR("UniqueDeviceID")
     NSURL *url = [self getSNSURLForUserName:userName];
     if (!url) return NO;
     UIApplication *application = [UIApplication sharedApplication];
-    [application openURL:url];
+    [application openURL:url options:@{} completionHandler:nil];
     return YES;
 }
 

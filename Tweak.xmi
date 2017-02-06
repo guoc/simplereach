@@ -57,6 +57,11 @@ typedef NS_ENUM(NSUInteger, BiometricEventType) {
     BiometricEventTypeFingerDown = 1
 };
 
+typedef NS_ENUM(NSUInteger, BiometricStatusType) {
+    BiometricStatusTypeFingerUp = 64,
+    BiometricStatusTypeFingerDown = 63
+};
+
 @protocol SBUIBiometricEventMonitorDelegate
 @required
 - (void)biometricEventMonitor:(id)monitor handleBiometricEvent:(unsigned)event;
@@ -384,7 +389,7 @@ static void resetBiometricMatchingEnabled() {
 }
 
 
-%group iOS_8_and_9
+%group iOS_8_and_9 // not for iOS 10
     %hook SpringBoard
     - (void)applicationDidFinishLaunching:(id)arg1 {
         // Don't need RETURN_IF_DISABLED
@@ -407,7 +412,7 @@ static void resetBiometricMatchingEnabled() {
  * The function below is called when Control Center is dismissed, except when
  * device is locked (identity matching is required to unlock device).
  */
-%group iOS_8_and_9
+%group iOS_8_and_9 // Not working in iOS 10
     %hook SBControlCenterController
     - (void)_finishPresenting:(_Bool)arg1 completion:(id)arg2 {
         RETURN_IF_DISABLED(%orig)
@@ -493,6 +498,27 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     }
 }
 
+%group iOS_10
+  %hook BiometricKit
+  -(void)statusMessage:(BiometricStatusType)status {
+      RETURN_IF_DISABLED(%orig)
+      if (!enabled) { return; }
+      if (status != BiometricStatusTypeFingerDown) {
+        return;
+      }
+      shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = YES;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, timeToForgetTime * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+          if (!touchInScreen) {
+              shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
+          }
+          // else: reset when touch leave screen
+      });
+      hasReached = NO;
+      leaveTouchIDTime = CACurrentMediaTime();
+  }
+  %end
+%end
+
 %group iOS_8
     %hook SBUIController
     - (void)_showControlCenterGestureBeganWithLocation:(struct CGPoint)arg1 {
@@ -506,7 +532,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_showControlCenterGestureBeganWithGestureRecognizer:(id)arg1 {
         RETURN_IF_DISABLED(%orig)
@@ -530,7 +556,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_showControlCenterGestureCancelled {
         RETURN_IF_DISABLED(%orig)
@@ -552,7 +578,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_showControlCenterGestureFailed {
         RETURN_IF_DISABLED(%orig)
@@ -564,7 +590,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 
 
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_showControlCenterGestureEndedWithGestureRecognizer:(id)arg1 {
         RETURN_IF_DISABLED(%orig)
@@ -586,7 +612,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_showControlCenterGestureChangedWithGestureRecognizer:(UIGestureRecognizer *)gestureRecognizer {
         RETURN_IF_DISABLED(%orig)
@@ -615,7 +641,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (_Bool)_shouldShowGrabberOnFirstSwipe {
         RETURN_IF_DISABLED(%orig)
@@ -653,7 +679,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 %end
 
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBControlCenterController
     - (void)_beginTransitionWithTouchLocation:(CGPoint)touchLocation {
         RETURN_IF_DISABLED(%orig)
@@ -674,7 +700,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 
 
 
-%group iOS_8_and_9
+%group iOS_8_and_9_and_10
     %hook SBReachabilityManager
     - (void)_notifyObserversReachabilityModeActive:(BOOL)active excludingObserver:(id)observer {
         RETURN_IF_DISABLED(%orig)
@@ -713,7 +739,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     #include <IOKit/hid/IOHIDEventSystem.h>
     #include <IOKit/hid/IOHIDEventSystemClient.h>
     #include <stdio.h>
@@ -789,7 +815,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
     %end
 %end
 
-%group iOS_9
+%group iOS_9_and_10
     %hook SBReachabilitySettings
     - (CGFloat)reachabilityInteractiveKeepAlive {
         RETURN_IF_DISABLED(%orig)
@@ -806,7 +832,9 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 
 
 
-%group iOS_8_and_9
+// Compatible with OneHandWizard
+
+%group iOS_8_and_9_and_10 // require testing for iOS 10
     %hook SBReachabilityManager
     - (BOOL)ohw_shouldOverwriteReachability {
         if (!ohwDisableRequired) {
@@ -819,7 +847,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 
 
 
-%group iOS_8_and_9
+%group iOS_8_and_9_and_10
     %hook SBReachabilitySettings
     - (CGFloat)yOffsetFactor {
         RETURN_IF_DISABLED(%orig)
@@ -858,14 +886,22 @@ void prefsChanged() {
 }
 
 %ctor {
-    if (IS_IOS_OR_NEWER(iOS_9_0)) {
+    if (IS_IOS_OR_NEWER(iOS_9_0)) {              // iOS 9, 10, ...
         registerIOHIDEventHandler();
     }
 
-    %init(iOS_8_and_9);
-    if (IS_IOS_OR_NEWER(iOS_9_0)) {
-        %init(iOS_9);
-    } else {
+    if (IS_IOS_OR_NEWER(iOS_10_0)) {
+      %init(iOS_10);
+    }
+    if (IS_IOS_BETWEEN(iOS_8_0, iOS_9_3)) {      // iOS 8, 9, then deprecated
+      %init(iOS_8_and_9);
+    }
+
+    %init(iOS_8_and_9_and_10);                   // iOS 8, 9, 10, ...
+
+    if (IS_IOS_OR_NEWER(iOS_9_0)) {              // iOS 9, 10, ...
+        %init(iOS_9_and_10);
+    } else {                                     // iOS 8, then deprecated
         %init(iOS_8);
     }
     reloadPrefs();
