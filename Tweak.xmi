@@ -6,6 +6,13 @@
 #import <QuartzCore/QuartzCore.h>
 
 #include <notify.h>
+#import <os/log.h>
+
+#define NSLog(...) do { \
+  @autoreleasepool { \
+    os_log(OS_LOG_DEFAULT, "%{public}@", [NSString stringWithFormat:__VA_ARGS__]); \
+  } \
+} while(0)
 
 #define SIMPLEREACH_DOMAIN "com.gviridis.simplereach"
 #define TAGE_DOMAIN "com.clezz.tage"
@@ -24,6 +31,18 @@
     [reachabilityManager setReachabilityTemporarilyDisabled:NO forReason: [[NSMutableSet alloc] init]];
 #define ACTIVATE_REACHABILITY \
     [[%c(SBReachabilityManager) sharedInstance] _handleReachabilityActivated];
+
+@interface SBHomeHardwareButton
+-(void)doublePressDown:(id)arg1;
+@end
+
+@interface SpringBoard : UIApplication
+-(void)_simulateHomeButtonPress;
+@end
+
+@interface SBMainSwitcherViewController
+-(BOOL)toggleSwitcherNoninteractively;
+@end
 
 @interface SBUserAgent
 + (id)sharedUserAgent;
@@ -78,7 +97,7 @@ typedef NS_ENUM(NSUInteger, BiometricStatusType) {
 + (id)manager;
 @end
 
-CFTimeInterval const timeToForgetTime = 0.6;
+CFTimeInterval const timeToForgetTime = 0.3;
 CGFloat const minimumYOffsetFactor = 0.1;
 CGFloat const maximumYOffsetFactor = 0.75;
 CGFloat const screenWidth = [[UIScreen mainScreen] bounds].size.width;
@@ -106,6 +125,8 @@ static BOOL enabled = NO;
 static BOOL readyToReach = NO;
 static BOOL shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
 static BOOL touchInScreen = NO;
+static BOOL needSimulateHomeButtonPress = NO;
+static NSUInteger needIgnoreTapTimes = 0;
 static BOOL yOffsetFactor_changeRequired = NO;
 static BOOL duration_changeRequired = NO;
 static BOOL ohwDisableRequired = NO;
@@ -433,6 +454,8 @@ static void resetBiometricMatchingEnabled() {
 static void resetWhenLeaveScreen() {
     // Don't need RETURN_IF_DISABLED
     touchInScreen = NO;
+    needSimulateHomeButtonPress = NO;
+    needIgnoreTapTimes = 0;
     readyToReach = NO;
     leaveTouchIDTime = 0.0;
     hasReached = NO;
@@ -499,19 +522,42 @@ static void temporarilyDisableReachabilityForVirtualHome() {
 }
 
 %group iOS_10
+  %hook SBHomeHardwareButton
+  -(void)doubleTapUp:(id)arg1 {
+    RETURN_IF_DISABLED(%orig)
+    needIgnoreTapTimes = 2;
+    needSimulateHomeButtonPress = NO;
+    [[%c(SBMainSwitcherViewController) sharedInstance] toggleSwitcherNoninteractively];
+    return;
+  }
+  %end
+%end
+
+%group iOS_10
   %hook BiometricKit
   -(void)statusMessage:(BiometricStatusType)status {
       RETURN_IF_DISABLED(%orig)
       if (!enabled) { return; }
-      if (status != BiometricStatusTypeFingerDown) {
+      // logics changed here from iOS 10, trigger when "FingerUp" rather than "FingerDown"
+      if (status != BiometricStatusTypeFingerUp) {
+        needSimulateHomeButtonPress = NO;
         return;
       }
       shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = YES;
+      needSimulateHomeButtonPress = YES;
       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, timeToForgetTime * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
           if (!touchInScreen) {
               shouldShowControlCenterTabControlOnFirstSwipe_changeRequired = NO;
           }
           // else: reset when touch leave screen
+          if (needSimulateHomeButtonPress) {
+						if (needIgnoreTapTimes > 0) {
+	            needIgnoreTapTimes--;
+	            return;
+	          }
+            [(SpringBoard*)[NSClassFromString(@"SpringBoard") sharedApplication] _simulateHomeButtonPress];
+          }
+          needSimulateHomeButtonPress = NO;
       });
       hasReached = NO;
       leaveTouchIDTime = CACurrentMediaTime();
@@ -538,6 +584,7 @@ static void temporarilyDisableReachabilityForVirtualHome() {
         RETURN_IF_DISABLED(%orig)
         %orig;
         touchInScreen = YES;
+        needSimulateHomeButtonPress = NO;
         temporarilyDisableReachabilityForVirtualHome();
         cacheAndModifyPushabilityPrefsEnabledIfNecessary();
     }

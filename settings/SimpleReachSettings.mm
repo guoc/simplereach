@@ -1,7 +1,16 @@
 #import <Preferences/Preferences.h>
 #import <MessageUI/MFMailComposeViewController.h>
 #import <sys/utsname.h>
+#import <os/log.h>
 
+#include <spawn.h>
+
+
+#define NSLog(...) do { \
+	@autoreleasepool { \
+		os_log(OS_LOG_DEFAULT, "%{public}@", [NSString stringWithFormat:__VA_ARGS__]); \
+	} \
+} while(0)
 #include <objc/runtime.h>
 
 OBJC_EXTERN CFStringRef MGCopyAnswer(CFStringRef key) WEAK_IMPORT_ATTRIBUTE;
